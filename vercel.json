@@ -5,14 +5,25 @@
   "outputDirectory": "build/webgl",
   "redirects": [
     {
-      "source": "/:path*",
+      "source": "/",
       "has": [
         {
           "type": "host",
           "value": "murir-tin-peach\\.vercel\\.app"
         }
       ],
-      "destination": "https://murirtin-express.vercel.app/:path*",
+      "destination": "https://murirtin-express.vercel.app/",
+      "permanent": true
+    },
+    {
+      "source": "/:path+",
+      "has": [
+        {
+          "type": "host",
+          "value": "murir-tin-peach\\.vercel\\.app"
+        }
+      ],
+      "destination": "https://murirtin-express.vercel.app/:path+",
       "permanent": true
     }
   ]
