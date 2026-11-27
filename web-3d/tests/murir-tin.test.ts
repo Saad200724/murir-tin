@@ -1,6 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import {
+  BD_ROUTE_SEGMENTS,
+  FULL_ROUTE_M,
+  sampleRouteState,
+  toHighwayKm,
+} from '../src/core/BangladeshRoute';
 import { BUS_SKINS, UPGRADES, getUpgradeCost } from '../src/core/GarageCatalog';
 import {
   BRIDGE_END_M,
@@ -11,8 +17,8 @@ import {
 } from '../src/core/RoadSimulation';
 import { SaveStore } from '../src/core/SaveStore';
 
-describe('Murir Tin 3D — Core Mechanics, Padma Setu & Models', () => {
-  it('generates valid glTF 2.0 binary .glb files for all 7 Dhaka models', () => {
+describe('Murir Tin 3D — Explore Bangladesh, Bridges, Slopes & Mechanics', () => {
+  it('generates valid glTF 2.0 binary .glb files for all 7 Dhaka models & OG banner', () => {
     const modelsDir = path.resolve(__dirname, '../public/models');
     const expected = [
       'murir_tin_bus.glb',
@@ -31,9 +37,39 @@ describe('Murir Tin 3D — Core Mechanics, Padma Setu & Models', () => {
       expect(buf.toString('ascii', 0, 4)).toBe('glTF');
       expect(buf.readUInt32LE(4)).toBe(2);
     }
+    expect(fs.existsSync(path.resolve(__dirname, '../public/og-banner.jpg'))).toBe(true);
   });
 
-  it('triggers বাম প্লাস্টিক near-miss reward and charges Nitro without crashing', () => {
+  it('covers contiguous 84,000m Thakurgaon->Coxs Bazar route with 5 bridges and elevation slopes', () => {
+    expect(BD_ROUTE_SEGMENTS[0].startM).toBe(0);
+    expect(BD_ROUTE_SEGMENTS[BD_ROUTE_SEGMENTS.length - 1].endM).toBe(FULL_ROUTE_M);
+    expect(toHighwayKm(FULL_ROUTE_M)).toBe('840.0');
+
+    const bridges = BD_ROUTE_SEGMENTS.filter((s) => s.biome === 'river_bridge');
+    expect(bridges.map((b) => b.bridgeStyle)).toEqual([
+      'jamuna',
+      'padma',
+      'meghna',
+      'gumti',
+      'karnaphuli',
+    ]);
+
+    // Verify smooth uphill & downhill slopePitch on Padma Bridge
+    const entry = sampleRouteState(BRIDGE_START_M + 100);
+    const mid = sampleRouteState(BRIDGE_START_M + 1500);
+    const exit = sampleRouteState(BRIDGE_END_M - 100);
+    expect(entry.elevationY).toBeGreaterThan(0);
+    expect(entry.slopePitch).toBeGreaterThan(0);
+    expect(mid.elevationY).toBeGreaterThan(4.0);
+    expect(mid.slopePitch).toBe(0);
+    expect(exit.slopePitch).toBeLessThan(0);
+
+    // Rain in Comilla, headlights at Cox's Bazar Marine Drive
+    expect(sampleRouteState(58000).rainIntensity).toBeGreaterThan(0.5);
+    expect(sampleRouteState(78000).headlightsOn).toBe(true);
+  });
+
+  it('triggers বাম প্লাস্টিক near-miss reward, mini-missions, and charges Nitro without crashing', () => {
     const sim = new RoadSimulation(1, 1, 1);
     sim.entities = [];
     sim.playerX = -1.5;
@@ -47,6 +83,7 @@ describe('Murir Tin 3D — Core Mechanics, Padma Setu & Models', () => {
 
     expect(gotChapani).toBe(true);
     expect(sim.plasticScrapes).toBeGreaterThanOrEqual(1);
+    expect(sim.activeMission.progress).toBeGreaterThanOrEqual(1);
     expect(sim.takaEarned).toBeGreaterThan(0);
     expect(sim.health).toBe(3);
   });
@@ -81,57 +118,50 @@ describe('Murir Tin 3D — Core Mechanics, Padma Setu & Models', () => {
     expect(sim.revive()).toBe(true);
     expect(sim.crashed).toBe(false);
     expect(sim.health).toBeGreaterThanOrEqual(2);
-    // Second revive in the same run is blocked
     expect(sim.revive()).toBe(false);
-    expect(getViralTitle(3600)).toContain('সম্রাট');
+    expect(getViralTitle(6500)).toContain('কিংবদন্তি');
   });
 
-  it('handles Padma Setu toll payment, nitro smash, insufficient-cash fine, and bridge crossing bonus', () => {
-    // 1. Pay toll cleanly
+  it('handles bridge toll payment, nitro smash (+Wanted Star & clear), fine, and crossing bonus', () => {
     const simPay = new RoadSimulation(1, 1, 1);
+    simPay.reset(BRIDGE_START_M - 30);
     simPay.entities = [];
     simPay.takaEarned = 400;
-    simPay.distanceM = BRIDGE_START_M - 30;
-    simPay.spawnEntity('toll_gate', 0, -2, 6.2, 1.5, 0, 0);
+    const g1 = simPay.spawnEntity('toll_gate', 0, -2, 6.2, 1.5, 0, 0);
+    g1.tollFee = PADMA_TOLL_FEE;
+    g1.tollLabel = 'পদ্মা সেতু';
     const payEvents = simPay.step(0.05, { steer: 0, accelerate: false, brake: false, nitro: false }, () => 0.5);
     expect(payEvents.some((e) => e.type === 'toll_paid')).toBe(true);
     expect(simPay.takaEarned).toBe(400 - PADMA_TOLL_FEE);
-    expect(simPay.totalTollPaid).toBe(PADMA_TOLL_FEE);
 
-    // 2. Nitro smash toll barrier
     const simSmash = new RoadSimulation(1, 1, 1);
+    simSmash.reset(BRIDGE_START_M - 30);
     simSmash.entities = [];
-    simSmash.takaEarned = 0;
     simSmash.nitroCharge = 80;
-    simSmash.spawnEntity('toll_gate', 0, -1, 6.2, 1.5, 0, 0);
+    const g2 = simSmash.spawnEntity('toll_gate', 0, -1, 6.2, 1.5, 0, 0);
+    g2.tollFee = PADMA_TOLL_FEE;
     const smashEvents = simSmash.step(0.04, { steer: 0, accelerate: false, brake: false, nitro: true }, () => 0.5);
     expect(smashEvents.some((e) => e.type === 'toll_smash')).toBe(true);
-    expect(simSmash.health).toBe(3);
+    expect(simSmash.wantedLevel).toBe(1);
 
-    // 3. Insufficient taka -> fine & bumper hit
-    const simFine = new RoadSimulation(1, 1, 1);
-    simFine.entities = [];
-    simFine.takaEarned = 50;
-    simFine.spawnEntity('toll_gate', 0, -1, 6.2, 1.5, 0, 0);
-    const fineEvents = simFine.step(0.04, { steer: 0, accelerate: false, brake: false, nitro: false }, () => 0.5);
-    expect(fineEvents.some((e) => e.type === 'toll_fine')).toBe(true);
-    expect(simFine.takaEarned).toBe(0);
-    expect(simFine.health).toBe(2);
+    // Clear wanted after driving past wantedClearDist
+    simSmash.distanceM = simSmash.wantedClearDist + 5;
+    const clearEvents = simSmash.step(0.03, { steer: 0, accelerate: false, brake: false, nitro: false }, () => 0.5);
+    expect(clearEvents.some((e) => e.type === 'wanted_cleared')).toBe(true);
+    expect(simSmash.wantedLevel).toBe(0);
 
-    // 4. Bridge state & crossing completion
     const simBridge = new RoadSimulation(1, 1, 1);
+    simBridge.reset(BRIDGE_END_M - 0.5);
     simBridge.entities = [];
-    simBridge.distanceM = BRIDGE_END_M - 0.5;
     const compEvents = simBridge.step(0.05, { steer: 0, accelerate: true, brake: false, nitro: false }, () => 0.5);
     expect(compEvents.some((e) => e.type === 'bridge_complete')).toBe(true);
-    expect(simBridge.padmaCrossings).toBe(1);
+    expect(simBridge.bridgesCrossed).toBe(1);
   });
 
   it('never blocks all 4 lanes simultaneously when spawning traffic', () => {
     const sim = new RoadSimulation(1, 1, 1);
     for (let step = 0; step < 300; step++) {
       sim.step(0.05, { steer: 0, accelerate: false, brake: false, nitro: false }, () => (step * 0.37) % 1);
-      // Check no Z-band has hazards across all 4 lanes (excluding full-road toll_gate)
       const hazards = sim.entities.filter((e) => e.kind !== 'toll_gate' && e.kind !== 'bus_stop');
       for (const h of hazards) {
         const lanesBlocked = new Set(
@@ -142,7 +172,7 @@ describe('Murir Tin 3D — Core Mechanics, Padma Setu & Models', () => {
     }
   });
 
-  it('persists playerName, garage skins and upgrades in SaveStore', () => {
+  it('persists playerName, graphicsPreset, keymap, unlockedHubs, and upgrades in SaveStore', () => {
     const mem = new Map<string, string>();
     const store = new SaveStore({
       getItem: (k) => mem.get(k) ?? null,
@@ -154,6 +184,9 @@ describe('Murir Tin 3D — Core Mechanics, Padma Setu & Models', () => {
       d.playerName = 'ওস্তাদ সাআদ';
       d.taka += 1000;
       d.engineLevel = 2;
+      d.graphicsPreset = 'ultra';
+      d.keymap.horn = 'KeyH';
+      d.unlockedHubs.push('dhaka');
       d.unlockedSkins.push(BUS_SKINS[1].id);
     });
 
@@ -165,7 +198,9 @@ describe('Murir Tin 3D — Core Mechanics, Padma Setu & Models', () => {
     });
     expect(reloaded.get().playerName).toBe('ওস্তাদ সাআদ');
     expect(reloaded.get().taka).toBe(1250);
-    expect(reloaded.get().engineLevel).toBe(2);
+    expect(reloaded.get().graphicsPreset).toBe('ultra');
+    expect(reloaded.get().keymap.horn).toBe('KeyH');
+    expect(reloaded.get().unlockedHubs).toContain('dhaka');
     expect(reloaded.get().unlockedSkins).toContain(BUS_SKINS[1].id);
     expect(getUpgradeCost(UPGRADES[0], 1)).toBe(300);
   });

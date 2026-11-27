@@ -3,16 +3,21 @@
  * - Continuous diesel rumble synced to bus speed
  * - Multi-tone Hydraulic Air Horn ("প্যাঁ-পোঁ-প্যাঁ!")
  * - Helper metal door double-slap ("ঠক্-ঠক্!")
- * - Metallic Chapani scrape sparks, Combo chimes, Toll ETC chime, Barrier smash, Milestone fanfare
+ * - Sparks, Combo chimes, Toll ETC chime, Train horn, Police siren, Mission fanfare, Wrench repair
+ * - Ready for real Puran Dhaka voiceover clips in /voices/<id>.mp3
  */
 export class DeshiAudioEngine {
   private ctx: AudioContext | null = null;
   private engineOsc: OscillatorNode | null = null;
   private engineGain: GainNode | null = null;
   private soundEnabled = true;
+  private sfxVolume = 0.85;
+  private engineVolume = 0.7;
 
-  public setPreferences(soundEnabled: boolean): void {
+  public setPreferences(soundEnabled: boolean, sfxVolume = 0.85, engineVolume = 0.7): void {
     this.soundEnabled = soundEnabled;
+    this.sfxVolume = Math.max(0, Math.min(1, sfxVolume));
+    this.engineVolume = Math.max(0, Math.min(1, engineVolume));
     if (!soundEnabled && this.engineGain && this.ctx) {
       this.engineGain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.05);
     }
@@ -55,13 +60,14 @@ export class DeshiAudioEngine {
   public updateEngineRumble(speed: number, isDriving: boolean, nitro: boolean): void {
     if (!this.ctx || !this.engineOsc || !this.engineGain || this.ctx.state !== 'running') return;
     const now = this.ctx.currentTime;
-    if (!this.soundEnabled || !isDriving) {
+    if (!this.soundEnabled || !isDriving || this.engineVolume <= 0.01) {
       this.engineGain.gain.setTargetAtTime(0.0001, now, 0.08);
       return;
     }
     const freq = 46 + speed * 1.35 + (nitro ? 24 : 0);
+    const targetGain = (nitro ? 0.055 : 0.032) * this.engineVolume;
     this.engineOsc.frequency.setTargetAtTime(freq, now, 0.08);
-    this.engineGain.gain.setTargetAtTime(nitro ? 0.055 : 0.032, now, 0.08);
+    this.engineGain.gain.setTargetAtTime(targetGain, now, 0.08);
   }
 
   public pauseAll(): void {
@@ -77,7 +83,7 @@ export class DeshiAudioEngine {
   }
 
   private tone(freq: number, dur: number, type: OscillatorType, vol: number, endFreq?: number, delay = 0): void {
-    if (!this.ctx || this.ctx.state !== 'running' || !this.soundEnabled) return;
+    if (!this.ctx || this.ctx.state !== 'running' || !this.soundEnabled || this.sfxVolume <= 0.01) return;
     const t0 = this.ctx.currentTime + delay;
     const osc = this.ctx.createOscillator();
     const g = this.ctx.createGain();
@@ -86,8 +92,9 @@ export class DeshiAudioEngine {
     if (endFreq !== undefined) {
       osc.frequency.exponentialRampToValueAtTime(Math.max(30, endFreq), t0 + dur);
     }
+    const scaledVol = vol * this.sfxVolume;
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.linearRampToValueAtTime(vol, t0 + 0.01);
+    g.gain.linearRampToValueAtTime(scaledVol, t0 + 0.01);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     osc.connect(g);
     g.connect(this.ctx.destination);
@@ -106,6 +113,23 @@ export class DeshiAudioEngine {
     this.tone(494, 0.24, 'sawtooth', 0.1, 460, 0.3);
   }
 
+  public playTrainHorn(): void {
+    if (!this.soundEnabled) return;
+    this.unlock();
+    // Deep two-chord Bangladesh Railway locomotive horn
+    this.tone(185, 0.45, 'sawtooth', 0.11, 180, 0);
+    this.tone(233, 0.45, 'sawtooth', 0.09, 228, 0);
+    this.tone(185, 0.55, 'sawtooth', 0.12, 175, 0.52);
+    this.tone(233, 0.55, 'sawtooth', 0.1, 222, 0.52);
+  }
+
+  public playPoliceSiren(): void {
+    if (!this.soundEnabled) return;
+    this.unlock();
+    this.tone(660, 0.18, 'triangle', 0.12, 920, 0);
+    this.tone(920, 0.18, 'triangle', 0.12, 660, 0.18);
+  }
+
   public playChapaniSparks(combo = 1): void {
     if (!this.soundEnabled) return;
     this.unlock();
@@ -120,6 +144,13 @@ export class DeshiAudioEngine {
     this.tone(190, 0.06, 'square', 0.15, 95, 0);
     this.tone(210, 0.06, 'square', 0.15, 105, 0.09);
     this.tone(720, 0.16, 'triangle', 0.12, 980, 0.16);
+  }
+
+  public playWrenchRepair(): void {
+    if (!this.soundEnabled) return;
+    this.unlock();
+    this.tone(440, 0.08, 'triangle', 0.14, 660, 0);
+    this.tone(660, 0.14, 'sine', 0.15, 990, 0.08);
   }
 
   public playTollPaid(): void {
@@ -149,5 +180,21 @@ export class DeshiAudioEngine {
     this.unlock();
     this.tone(140, 0.36, 'sawtooth', 0.24, 38, 0);
     this.tone(95, 0.42, 'square', 0.18, 32, 0.03);
+  }
+
+  /**
+   * Plays an optional real recorded Puran Dhaka MP3 clip from /voices/<clipId>.mp3 if present.
+   */
+  public playVoicePackClip(clipId: string): void {
+    if (!this.soundEnabled || this.sfxVolume <= 0.01) return;
+    try {
+      const audio = new Audio(`./voices/${clipId}.mp3`);
+      audio.volume = Math.min(1, this.sfxVolume);
+      void audio.play().catch(() => {
+        // Optional voicepack clip not installed yet
+      });
+    } catch {
+      // Ignore audio element errors
+    }
   }
 }

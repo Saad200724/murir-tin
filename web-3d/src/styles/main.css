@@ -148,7 +148,7 @@ canvas.scorecard-preview {
   button,
   select,
   textarea,
-  input:not([type="checkbox"], [type="radio"]),
+  input:not([type="checkbox"], [type="radio"], [type="range"]),
   [role="button"],
   label:has(input[type="checkbox"], input[type="radio"])
 ) {
@@ -156,7 +156,7 @@ canvas.scorecard-preview {
   min-inline-size: var(--target-size);
 }
 
-:where(button, input, a, [tabindex]):focus-visible {
+:where(button, input, select, a, [tabindex]):focus-visible {
   outline: 3px solid var(--rickshaw-yellow);
   outline-offset: 3px;
 }
@@ -186,7 +186,7 @@ button:disabled {
   display: none !important;
 }
 
-/* Top Stack: HUD + Callout live in flow together so they NEVER overlap! */
+/* Top Stack: HUD + Mission + Callout flow cleanly vertically without overlap */
 .top-stack {
   position: fixed;
   top: 0;
@@ -196,7 +196,7 @@ button:disabled {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.38rem;
   padding-top: max(0.5rem, env(safe-area-inset-top, 0px));
   padding-left: max(0.65rem, env(safe-area-inset-left, 0px));
   padding-right: max(0.65rem, env(safe-area-inset-right, 0px));
@@ -209,7 +209,7 @@ button:disabled {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.45rem;
+  gap: 0.4rem;
   pointer-events: none;
 }
 
@@ -222,7 +222,7 @@ button:disabled {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.36rem;
+  gap: 0.35rem;
   pointer-events: auto;
 }
 
@@ -234,14 +234,14 @@ button:disabled {
 .pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.28rem;
-  padding: 0.3rem 0.62rem;
+  gap: 0.25rem;
+  padding: 0.28rem 0.58rem;
   border-radius: 999px;
   background: rgb(27 31 42 / 0.88);
   border: 2px solid rgb(255 255 255 / 0.25);
   color: var(--cream);
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   white-space: nowrap;
 }
 
@@ -253,6 +253,17 @@ button:disabled {
 .pill-score {
   border-color: var(--rickshaw-yellow);
   color: var(--rickshaw-yellow);
+}
+
+.pill-health {
+  gap: 0.16rem;
+}
+
+.gear-life-svg {
+  width: 18px;
+  height: 18px;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 .icon-btn {
@@ -272,8 +283,8 @@ button:disabled {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.22rem;
-  flex: 1 1 210px;
+  gap: 0.2rem;
+  flex: 1 1 240px;
 }
 
 .route-meta {
@@ -281,15 +292,26 @@ button:disabled {
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
 }
 
 .stop-badge {
   background: var(--rickshaw-yellow);
   color: var(--ink);
   font-weight: 700;
-  font-size: 0.82rem;
-  padding: 0.16rem 0.66rem;
+  font-size: 0.8rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.km-badge {
+  background: rgb(27 31 42 / 0.9);
+  color: #72efdd;
+  border: 1.5px solid var(--bus-green);
+  font-weight: 700;
+  font-size: 0.76rem;
+  padding: 0.13rem 0.5rem;
   border-radius: 999px;
   white-space: nowrap;
 }
@@ -299,8 +321,8 @@ button:disabled {
   color: #bde0fe;
   border: 1.5px solid #3a86ff;
   font-weight: 700;
-  font-size: 0.78rem;
-  padding: 0.14rem 0.55rem;
+  font-size: 0.76rem;
+  padding: 0.13rem 0.5rem;
   border-radius: 999px;
   white-space: nowrap;
 }
@@ -310,15 +332,37 @@ button:disabled {
   color: #ffffff;
   border: 1.5px solid var(--rickshaw-yellow);
   font-weight: 800;
-  font-size: 0.78rem;
-  padding: 0.14rem 0.55rem;
+  font-size: 0.76rem;
+  padding: 0.13rem 0.5rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.wanted-badge {
+  background: rgb(27 31 42 / 0.94);
+  color: #ffbe0b;
+  border: 1.5px solid #ef476f;
+  font-weight: 800;
+  font-size: 0.76rem;
+  padding: 0.13rem 0.5rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.fps-badge {
+  background: rgb(15 23 42 / 0.9);
+  color: #4ade80;
+  border: 1px solid #4ade80;
+  font-weight: 700;
+  font-size: 0.74rem;
+  padding: 0.12rem 0.45rem;
   border-radius: 999px;
   white-space: nowrap;
 }
 
 .nitro-track {
-  width: min(195px, 60vw);
-  height: 10px;
+  width: min(210px, 60vw);
+  height: 9px;
   border-radius: 999px;
   background: rgb(27 31 42 / 0.85);
   border: 1.5px solid #ffffff;
@@ -332,7 +376,29 @@ button:disabled {
   transition: width 120ms linear;
 }
 
-/* Helper Callout Banner (flows naturally below HUD — zero overlap!) */
+.mission-challenge-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.mission-chip,
+.challenge-chip {
+  background: rgb(20 26 38 / 0.86);
+  border: 1.5px solid var(--bus-green);
+  color: var(--cream);
+  border-radius: 999px;
+  padding: 0.22rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.challenge-chip {
+  border-color: var(--bus-crimson);
+  color: #ffd166;
+}
+
 .helper-callout {
   display: inline-flex;
   align-items: center;
@@ -343,11 +409,67 @@ button:disabled {
   color: var(--ink);
   border: 3px solid var(--bus-crimson);
   border-radius: 999px;
-  padding: 0.34rem 1rem;
-  font-size: 0.94rem;
+  padding: 0.3rem 0.95rem;
+  font-size: 0.92rem;
   text-align: center;
   box-shadow: 0 6px 20px rgb(0 0 0 / 0.38);
   pointer-events: none;
+}
+
+/* GTA V Corner Mini-Map Widget */
+.minimap-widget {
+  position: fixed;
+  left: max(0.75rem, env(safe-area-inset-left, 0px));
+  bottom: calc(5.2rem + env(safe-area-inset-bottom, 0px));
+  z-index: 24;
+  padding: 4px;
+  background: rgb(15 20 30 / 0.9);
+  border: 2.5px solid rgb(255 255 255 / 0.42);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
+}
+
+.minimap-widget canvas {
+  display: block;
+  border-radius: 7px;
+  width: 156px;
+  height: 100px;
+}
+
+.minimap-bars {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.mm-bar {
+  height: 6px;
+  background: rgb(255 255 255 / 0.16);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.mm-health-fill {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: #06d6a0;
+}
+
+.mm-nitro-fill {
+  display: block;
+  height: 100%;
+  width: 60%;
+  background: #38bdf8;
+}
+
+.minimap-label {
+  font-size: 0.72rem;
+  color: var(--rickshaw-yellow);
+  text-align: center;
 }
 
 /* Bottom Driving Controls */
@@ -424,8 +546,8 @@ button:disabled {
   background: #1f2433;
   border: 4px solid var(--rickshaw-yellow);
   border-radius: 26px;
-  padding: 1.45rem 1.35rem;
-  max-width: 470px;
+  padding: 1.35rem 1.3rem;
+  max-width: 490px;
   width: 100%;
   text-align: center;
   box-shadow: 0 16px 40px rgb(0 0 0 / 0.5);
@@ -436,47 +558,62 @@ button:disabled {
   background: var(--bus-crimson);
   color: #ffffff;
   font-weight: 700;
-  font-size: 0.86rem;
+  font-size: 0.84rem;
   padding: 0.25rem 0.85rem;
   border-radius: 999px;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.45rem;
 }
 
 .title-card h1 {
-  font-size: clamp(2rem, 6vw, 2.65rem);
+  font-size: clamp(1.95rem, 6vw, 2.55rem);
   color: var(--rickshaw-yellow);
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.3rem;
 }
 
 .title-sub {
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   color: #e2e8f0;
-  margin: 0 0 0.9rem;
+  margin: 0 0 0.75rem;
+}
+
+.title-challenge-banner {
+  background: rgb(239 71 111 / 0.18);
+  border: 2px solid var(--bus-crimson);
+  color: #ffd166;
+  border-radius: 12px;
+  padding: 0.45rem 0.7rem;
+  margin-bottom: 0.7rem;
+  font-weight: 700;
+  font-size: 0.9rem;
 }
 
 .title-best {
   display: flex;
   justify-content: space-around;
   background: rgb(255 255 255 / 0.08);
-  padding: 0.5rem;
+  padding: 0.48rem;
   border-radius: 14px;
-  margin-bottom: 0.85rem;
-  font-size: 0.92rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
 }
 
-.name-field-row {
-  margin-bottom: 0.8rem;
+.title-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
 }
 
-input[type="text"] {
+input[type="text"],
+select {
   width: 100%;
-  padding: 0.62rem 0.85rem;
+  padding: 0.58rem 0.75rem;
   border-radius: 12px;
   border: 2px solid rgb(255 255 255 / 0.28);
-  background: rgb(15 18 26 / 0.85);
+  background: rgb(15 18 26 / 0.9);
   color: var(--cream);
   font-family: inherit;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 600;
 }
 
@@ -487,51 +624,52 @@ input[type="text"]::placeholder {
 .title-actions {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.55rem;
 }
 
 .title-sub-actions {
   display: flex;
-  gap: 0.5rem;
+  flex-wrap: wrap;
+  gap: 0.45rem;
 }
 
 .title-sub-actions button {
-  flex: 1;
+  flex: 1 1 115px;
 }
 
 .btn-primary {
   background: linear-gradient(180deg, #ffbe0b, #fb8500);
   color: var(--ink);
-  padding: 0.8rem 1.2rem;
+  padding: 0.78rem 1.15rem;
   border-radius: 16px;
-  font-size: 1.02rem;
+  font-size: 1rem;
 }
 
 .btn-secondary {
   background: var(--bus-green);
   color: #0b241d;
-  padding: 0.7rem 1rem;
+  padding: 0.68rem 1rem;
   border-radius: 14px;
-  font-size: 0.94rem;
+  font-size: 0.92rem;
 }
 
 .btn-outline {
   background: rgb(255 255 255 / 0.1);
   color: var(--cream);
   border: 2px solid rgb(255 255 255 / 0.35);
-  padding: 0.62rem 0.9rem;
+  padding: 0.6rem 0.85rem;
   border-radius: 12px;
-  font-size: 0.88rem;
+  font-size: 0.86rem;
 }
 
 .btn-big {
-  font-size: 1.12rem;
-  padding: 0.9rem 1.3rem;
+  font-size: 1.1rem;
+  padding: 0.88rem 1.25rem;
 }
 
 .controls-tip {
-  margin: 0.8rem 0 0;
-  font-size: 0.82rem;
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
   color: #cbd5e1;
 }
 
@@ -539,10 +677,10 @@ input[type="text"]::placeholder {
 dialog[open] {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  width: min(94vw, 620px);
-  max-height: 90dvh;
-  padding: 1.15rem;
+  gap: 0.72rem;
+  width: min(95vw, 720px);
+  max-height: 92dvh;
+  padding: 1.1rem;
   border: 4px solid var(--rickshaw-yellow);
   border-radius: 22px;
   background: #1f2433;
@@ -555,7 +693,7 @@ dialog:modal {
 }
 
 dialog::backdrop {
-  background: rgb(10 12 18 / 0.72);
+  background: rgb(10 12 18 / 0.76);
   backdrop-filter: blur(4px);
   overflow: hidden;
   overscroll-behavior: contain;
@@ -587,7 +725,7 @@ dialog::backdrop {
 }
 
 .dialog-header h1 {
-  font-size: 1.25rem;
+  font-size: 1.22rem;
   color: var(--rickshaw-yellow);
 }
 
@@ -599,6 +737,180 @@ dialog::backdrop {
   color: var(--cream);
   font-size: 1.1rem;
   flex-shrink: 0;
+}
+
+/* AAA Pause Menu Tabs (single-row scrollable, aria-selected underline) */
+.pause-tablist {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  border-bottom: 1.5px solid rgb(255 255 255 / 0.14);
+  padding-bottom: 0.25rem;
+}
+
+.pause-tablist [role="tab"] {
+  position: relative;
+  flex: none;
+  background: transparent;
+  color: #cbd5e1;
+  padding: 0.55rem 0.85rem;
+  border-radius: 10px 10px 0 0;
+  font-size: 0.92rem;
+  white-space: nowrap;
+}
+
+.pause-tablist [role="tab"][aria-selected="true"] {
+  color: var(--rickshaw-yellow);
+}
+
+.pause-tablist [role="tab"][aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  border-block-end: 3px solid var(--rickshaw-yellow);
+}
+
+.pause-tabpanel {
+  min-height: 220px;
+}
+
+.pause-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  border-top: 1.5px solid rgb(255 255 255 / 0.14);
+  padding-top: 0.65rem;
+}
+
+.pause-footer button {
+  flex: 1 1 130px;
+}
+
+/* Interactive Bangladesh Map */
+.bd-map-shell {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+.bd-map-stage {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 2px solid rgb(255 255 255 / 0.2);
+  background: #0d1b2a;
+  aspect-ratio: 1 / 1;
+  max-height: 360px;
+}
+
+.bd-map-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+}
+
+.bd-map-zoom {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bd-map-zoom button {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: rgb(20 26 38 / 0.9);
+}
+
+.bd-map-info {
+  background: rgb(255 255 255 / 0.06);
+  border: 1.5px solid rgb(255 255 255 / 0.16);
+  border-radius: 14px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.bd-info-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.bd-info-head strong {
+  color: var(--rickshaw-yellow);
+  font-size: 1.05rem;
+}
+
+.bd-info-km {
+  color: var(--bus-green);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.bd-info-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.88rem;
+  color: #cbd5e1;
+}
+
+.bd-info-actions button {
+  width: 100%;
+}
+
+/* Keymap & Sliders */
+.keymap-hint {
+  margin: 0 0 0.6rem;
+  font-size: 0.86rem;
+  color: #cbd5e1;
+}
+
+.keymap-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.7rem;
+}
+
+.keymap-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  background: rgb(255 255 255 / 0.07);
+  padding: 0.5rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.88rem;
+}
+
+.keymap-row button {
+  min-width: 96px;
+}
+
+.range-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  background: rgb(255 255 255 / 0.08);
+  padding: 0.6rem 0.85rem;
+  border-radius: 12px;
+}
+
+.range-row input[type="range"] {
+  width: 140px;
+  accent-color: var(--rickshaw-yellow);
 }
 
 .garage-balance {
@@ -742,8 +1054,8 @@ dialog::backdrop {
   --label-1: "র‍্যাংক";
   --label-2: "ওস্তাদের নাম";
   --label-3: "পয়েন্ট";
-  --label-4: "স্টপ ও দূরত্ব";
-  --label-5: "পদ্মা সেতু";
+  --label-4: "লোকেশন ও দূরত্ব";
+  --label-5: "সেতু পার";
 }
 
 .lb-table thead {
@@ -857,9 +1169,15 @@ dialog::backdrop {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.6rem;
   background: rgb(255 255 255 / 0.08);
-  padding: 0.65rem 0.85rem;
+  padding: 0.6rem 0.85rem;
   border-radius: 12px;
+}
+
+.toggle-row select {
+  width: auto;
+  max-width: 210px;
 }
 
 .toggle-row input[type="checkbox"] {
@@ -874,22 +1192,26 @@ dialog::backdrop {
     flex: 1 0 100%;
   }
   .pill {
-    padding: 0.24rem 0.48rem;
-    font-size: 0.78rem;
+    padding: 0.22rem 0.46rem;
+    font-size: 0.76rem;
   }
   .icon-btn {
-    width: 40px;
-    height: 40px;
+    width: 38px;
+    height: 38px;
     font-size: 1rem;
   }
-  .helper-callout {
-    font-size: 0.84rem;
-    padding: 0.28rem 0.8rem;
+  .minimap-widget {
+    bottom: calc(8.4rem + env(safe-area-inset-bottom, 0px));
+    left: max(0.5rem, env(safe-area-inset-left, 0px));
+  }
+  .minimap-widget canvas {
+    width: 110px;
+    height: 70px;
   }
   .drive-controls {
     flex-direction: column;
     align-items: stretch;
-    gap: 0.45rem;
+    gap: 0.42rem;
   }
   .action-pad {
     order: 1;
@@ -903,15 +1225,18 @@ dialog::backdrop {
   .steer-pad .ctrl-btn {
     flex: 1;
     min-width: 0;
-    padding: 0.5rem 0.45rem;
-    font-size: 0.86rem;
-    min-height: 48px;
+    padding: 0.48rem 0.4rem;
+    font-size: 0.84rem;
+    min-height: 46px;
   }
   .steer-pad .steer-btn {
-    min-height: 54px;
-    font-size: 0.96rem;
+    min-height: 52px;
+    font-size: 0.94rem;
   }
-  .title-sub-actions {
-    flex-direction: column;
+  .title-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .bd-map-shell {
+    grid-template-columns: 1fr;
   }
 }

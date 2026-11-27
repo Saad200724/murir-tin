@@ -5,18 +5,27 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#ffbe0b" />
-    <meta name="description" content="মুড়ির টিন 3D — ওস্তাদ বাম প্লাস্টিক! ঢাকা থেকে পদ্মা সেতু হয়ে লোকাল বাস চালানোর সেরা ৩ডি ওয়েব গেম!" />
+    <meta name="description" content="মুড়ির টিন 3D — ঠাকুরগাঁও থেকে কক্সবাজার ৮৪০ কিমি! যমুনা, পদ্মা, মেঘনা, গোমতী ও কর্ণফুলী সেতু পাড়ি দিয়ে লাইভ পয়েন্ট টেবিলে নাম লেখাও!" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://murirtin-express.vercel.app/" />
+    <meta property="og:title" content="মুড়ির টিন 3D — ঠাকুরগাঁও ➔ কক্সবাজার বাস অ্যাডভেঞ্চার!" />
+    <meta property="og:description" content="ব্রেক নাই, লুকিং গ্লাস নাই! চাপানি মেরে পদ্মা ও যমুনা সেতু পার হও, লাইভ পয়েন্ট টেবিলে #1 ওস্তাদ হও!" />
+    <meta property="og:image" content="https://murirtin-express.vercel.app/og-banner.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="মুড়ির টিন 3D — Explore Bangladesh" />
+    <meta name="twitter:description" content="ঠাকুরগাঁও থেকে কক্সবাজার ৮৪০ কিমি ৩ডি লোকাল বাস গেম!" />
+    <meta name="twitter:image" content="https://murirtin-express.vercel.app/og-banner.jpg" />
     <link rel="manifest" href="./manifest.webmanifest" />
-    <title>মুড়ির টিন 3D — ওস্তাদ বাম প্লাস্টিক!</title>
+    <title>মুড়ির টিন 3D — ঠাকুরগাঁও ➔ কক্সবাজার!</title>
   </head>
   <body>
     <main id="app">
-      <!-- 3D Dhaka & Padma Setu Stage -->
-      <section id="game-stage" aria-label="Murir Tin 3D Highway"></section>
+      <!-- 3D Explore Bangladesh Stage -->
+      <section id="game-stage" aria-label="Murir Tin 3D Bangladesh Highway"></section>
       <div id="screen-flash" class="screen-flash" aria-hidden="true"></div>
       <div id="floating-fx" class="floating-fx" aria-hidden="true"></div>
 
-      <!-- Non-overlapping Top HUD + Helper Callout Stack -->
+      <!-- Non-overlapping Top HUD + Mission + Helper Callout Stack -->
       <div class="top-stack">
         <header id="top-hud" class="hud-bar">
           <div class="hud-left">
@@ -28,7 +37,7 @@
               <span aria-hidden="true">🏆</span>
               <strong id="hud-score">0</strong>
             </div>
-            <div class="pill pill-health" id="hud-health" aria-label="Bus wrench health">🔧🔧🔧</div>
+            <div class="pill pill-health" id="hud-health" aria-label="Bus gear health"></div>
             <div class="pill pill-pax" title="বাদুড়ঝোলা যাত্রী">
               <span aria-hidden="true">👥</span>
               <strong id="hud-pax">6</strong>
@@ -37,9 +46,12 @@
 
           <div class="hud-route">
             <div class="route-meta">
-              <span id="hud-stop-label" class="stop-badge">📍 মিরপুর ১০ ➔ ফার্মগেট</span>
+              <span id="hud-stop-label" class="stop-badge">📍 ঠাকুরগাঁও ➔ দিনাজপুর ফ্লাইওভার</span>
+              <span id="hud-km" class="km-badge">0.0 / 840 km</span>
               <span id="hud-speed" class="speed-badge">74 km/h</span>
               <span id="hud-combo" class="combo-badge hidden">x2</span>
+              <span id="hud-wanted" class="wanted-badge hidden">⭐</span>
+              <span id="hud-fps" class="fps-badge hidden">60 FPS</span>
             </div>
             <div class="nitro-track" aria-label="Nitro charge">
               <div id="hud-nitro-fill" class="nitro-fill"></div>
@@ -47,24 +59,38 @@
           </div>
 
           <div class="hud-right">
+            <button id="btn-pause" type="button" class="icon-btn" aria-label="পজ মেনু (ESC)" title="ম্যাপ ও পজ মেনু (ESC)">
+              <span aria-hidden="true">⏸️</span>
+            </button>
             <button id="btn-leaderboard" type="button" class="icon-btn" aria-label="লাইভ পয়েন্ট টেবিল" title="লাইভ পয়েন্ট টেবিল">
               <span aria-hidden="true">🏅</span>
             </button>
             <button id="btn-garage" type="button" class="icon-btn" aria-label="ধোলাইখাল গ্যারেজ" title="গ্যারেজ">
               <span aria-hidden="true">🔧</span>
             </button>
-            <button id="btn-settings" type="button" class="icon-btn" aria-label="সেটিংস" title="সেটিংস">
-              <span aria-hidden="true">⚙️</span>
-            </button>
           </div>
         </header>
 
-        <!-- Helper Shout Callout Banner (in flow below HUD, never overlaps!) -->
+        <div class="mission-challenge-row">
+          <div id="hud-mission" class="mission-chip hidden" aria-live="polite"></div>
+          <div id="hud-challenge" class="challenge-chip hidden" aria-live="polite"></div>
+        </div>
+
         <aside id="helper-callout" class="helper-callout hidden" aria-live="polite">
           <span aria-hidden="true">📣</span>
           <strong id="helper-callout-text">বাম প্লাস্টিক ক্লিয়ার!</strong>
         </aside>
       </div>
+
+      <!-- GTA V Corner Radar Mini-Map (Click or press M to expand full BD map!) -->
+      <button id="minimap-widget" type="button" class="minimap-widget hidden" aria-label="বাংলাদেশ ম্যাপ বড় করুন (M)">
+        <canvas id="minimap-canvas" width="168" height="108"></canvas>
+        <div class="minimap-bars">
+          <div class="mm-bar"><span id="mm-health-fill" class="mm-health-fill"></span></div>
+          <div class="mm-bar"><span id="mm-nitro-fill" class="mm-nitro-fill"></span></div>
+        </div>
+        <span class="minimap-label">🗺️ ম্যাপ (M)</span>
+      </button>
 
       <!-- Bottom Driving Controls (Touch + Desktop Friendly) -->
       <footer id="drive-controls" class="drive-controls hidden">
@@ -93,24 +119,31 @@
       <!-- Title / Splash Screen -->
       <section id="title-overlay" class="title-overlay" aria-labelledby="title-heading">
         <div class="title-card">
-          <div class="rickshaw-badge">ঢাকা ➔ পদ্মা সেতু 🌉 • ব্রেক নাই!</div>
+          <div class="rickshaw-badge">ঠাকুরগাঁও ➔ কক্সবাজার (৮৪০ কিমি) • ৫ মহা-সেতু 🌉</div>
           <h1 id="title-heading">মুড়ির টিন 3D</h1>
           <p class="title-sub">
-            প্রাইভেট কারের বাম পাশ ঘষে <strong>চাপানি</strong> মারো, <strong>পদ্মা সেতুর টোল (৳২৫০)</strong> দাও বা নাইট্রোতে ব্যারিকেড উড়াও, আর লাইভ পয়েন্ট টেবিলে নাম লেখাও!
+            উত্তরের ধানক্ষেত থেকে যমুনা, ঢাকা মেট্রো, পদ্মা, মেঘনা ও কর্ণফুলী সেতু হয়ে কক্সবাজার মেরিন ড্রাইভ!
           </p>
+          <div id="title-challenge-banner" class="title-challenge-banner hidden"></div>
           <div class="title-best">
             <span>সেরা স্কোর: <strong id="title-best-score">0</strong></span>
             <span>জমা ভাড়া: <strong id="title-total-taka">৳ 250</strong></span>
           </div>
-          <div class="name-field-row">
-            <label for="input-player-name-title" class="sr-only">ওস্তাদের নাম</label>
-            <input
-              id="input-player-name-title"
-              type="text"
-              maxlength="24"
-              autocomplete="nickname"
-              placeholder="আপনার নাম লিখুন (যেমন: ওস্তাদ সাআদ)"
-            />
+          <div class="title-form-grid">
+            <div>
+              <label for="input-player-name-title" class="sr-only">ওস্তাদের নাম</label>
+              <input
+                id="input-player-name-title"
+                type="text"
+                maxlength="24"
+                autocomplete="nickname"
+                placeholder="আপনার নাম লিখুন (যেমন: ওস্তাদ সাআদ)"
+              />
+            </div>
+            <div>
+              <label for="select-start-hub" class="sr-only">শুরুর জেলা</label>
+              <select id="select-start-hub" aria-label="শুরুর জেলা বেছে নিন"></select>
+            </div>
           </div>
           <div class="title-actions">
             <button id="btn-start-drive" type="button" class="btn-primary btn-big">
@@ -118,16 +151,102 @@
             </button>
             <div class="title-sub-actions">
               <button id="btn-open-garage-title" type="button" class="btn-secondary">
-                <span aria-hidden="true">🔧</span> গ্যারেজ ও স্কিন
+                <span aria-hidden="true">🔧</span> গ্যারেজ
               </button>
               <button id="btn-open-leaderboard-title" type="button" class="btn-outline">
-                <span aria-hidden="true">🏅</span> লাইভ পয়েন্ট টেবিল
+                <span aria-hidden="true">🏅</span> পয়েন্ট টেবিল
+              </button>
+              <button id="btn-open-pause-title" type="button" class="btn-outline">
+                <span aria-hidden="true">🗺️</span> ম্যাপ ও সেটিংস
               </button>
             </div>
           </div>
-          <p class="controls-tip">কীবোর্ড: <strong>A/D</strong> বা <strong>◀/▶</strong> চাপানো • <strong>Space</strong> হর্ন • <strong>Shift</strong> নাইট্রো</p>
+          <p class="controls-tip"><strong>A/D</strong> চাপানো • <strong>Space</strong> হর্ন • <strong>Shift</strong> নাইট্রো • <strong>M</strong> ম্যাপ • <strong>ESC</strong> পজ মেনু</p>
         </div>
       </section>
+
+      <!-- AAA 4-Tab Pause Menu (ESC / Mobile Back / M) -->
+      <dialog id="pause-dialog" closedby="any" aria-labelledby="pause-title">
+        <div class="dialog-header">
+          <h1 id="pause-title"><span aria-hidden="true">🎮</span> মুড়ির টিন পজ মেনু</h1>
+          <form method="dialog">
+            <button type="submit" class="close-btn" value="close" aria-label="খেলায় ফিরুন">✕</button>
+          </form>
+        </div>
+
+        <div class="pause-tablist" role="tablist" aria-label="পজ মেনু ট্যাব">
+          <button type="button" role="tab" id="tab-map" aria-selected="true">🗺️ ম্যাপ</button>
+          <button type="button" role="tab" id="tab-settings" aria-selected="false">⚙️ সেটিংস</button>
+          <button type="button" role="tab" id="tab-keymap" aria-selected="false">⌨️ কন্ট্রোল</button>
+          <button type="button" role="tab" id="tab-graphics" aria-selected="false">🖥️ গ্রাফিক্স</button>
+        </div>
+
+        <div id="panel-map" role="tabpanel" aria-labelledby="tab-map" class="pause-tabpanel">
+          <div id="bd-map-mount" class="bd-map-mount"></div>
+        </div>
+
+        <div id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" class="pause-tabpanel" hidden>
+          <div class="settings-rows">
+            <label class="toggle-row">
+              <span><span aria-hidden="true">🔊</span> সাউন্ড ও হর্ন চালু</span>
+              <input id="toggle-sfx" type="checkbox" checked />
+            </label>
+            <label class="range-row">
+              <span>হর্ন ও স্পার্ক ভলিউম</span>
+              <input id="range-sfx-vol" type="range" min="0" max="100" value="85" />
+            </label>
+            <label class="range-row">
+              <span>ইঞ্জিন সাউন্ড ভলিউম</span>
+              <input id="range-engine-vol" type="range" min="0" max="100" value="70" />
+            </label>
+            <label class="range-row">
+              <span>স্টিয়ারিং সেন্সিটিভিটি</span>
+              <input id="range-steer-sens" type="range" min="60" max="160" value="100" />
+            </label>
+            <div class="toggle-row">
+              <span>📷 ক্যামেরা অ্যাঙ্গেল</span>
+              <select id="select-camera-mode" aria-label="ক্যামেরা অ্যাঙ্গেল">
+                <option value="chase">ক্লাসিক চেজ (Chase)</option>
+                <option value="close">ক্লোজ অ্যাকশন (Close)</option>
+                <option value="wide">ওয়াইড হাইওয়ে (Wide)</option>
+              </select>
+            </div>
+            <button id="btn-reset-save" type="button" class="btn-outline">
+              <span aria-hidden="true">🔄</span> সব লোকাল ডাটা রিসেট করুন
+            </button>
+          </div>
+        </div>
+
+        <div id="panel-keymap" role="tabpanel" aria-labelledby="tab-keymap" class="pause-tabpanel" hidden>
+          <p class="keymap-hint">যেকোনো বাটনে ক্লিক করে নতুন কীবোর্ড কী চাপুন (মোবাইলে অন-স্ক্রিন বাটন ও ড্র্যাগ কাজ করবে):</p>
+          <div id="keymap-list" class="keymap-list"></div>
+          <button id="btn-reset-keymap" type="button" class="btn-outline">↩️ ডিফল্ট কন্ট্রোল</button>
+        </div>
+
+        <div id="panel-graphics" role="tabpanel" aria-labelledby="tab-graphics" class="pause-tabpanel" hidden>
+          <div class="settings-rows">
+            <div class="toggle-row">
+              <span>🖥️ গ্রাফিক্স কোয়ালিটি</span>
+              <select id="select-graphics" aria-label="গ্রাফিক্স কোয়ালিটি">
+                <option value="low">Low (বাজেট ফোন / 60 FPS)</option>
+                <option value="medium">Medium (ব্যালেন্সড)</option>
+                <option value="high">High (হাই কোয়ালিটি)</option>
+                <option value="ultra">Ultra (ম্যাক্স রেজোলিউশন)</option>
+              </select>
+            </div>
+            <label class="toggle-row">
+              <span>📊 স্ক্রিনে লাইভ FPS কাউন্টার দেখান</span>
+              <input id="toggle-fps" type="checkbox" />
+            </label>
+          </div>
+        </div>
+
+        <div class="pause-footer">
+          <button id="btn-pause-resume" type="button" class="btn-primary">▶️ খেলা চালিয়ে যান</button>
+          <button id="btn-pause-restart" type="button" class="btn-secondary">🔄 নতুন ট্রিপ</button>
+          <button id="btn-pause-home" type="button" class="btn-outline">🏠 হোম</button>
+        </div>
+      </dialog>
 
       <!-- 1. Dholaikhal Garage & Skins Dialog -->
       <dialog id="garage-dialog" closedby="any" aria-labelledby="garage-title">
@@ -175,10 +294,10 @@
           </button>
           <div class="share-row">
             <button id="btn-download-card" type="button" class="btn-outline">
-              <span aria-hidden="true">📥</span> মিম কার্ড ডাউনলোড
+              <span aria-hidden="true">📥</span> মিম কার্ড
             </button>
             <button id="btn-copy-flex" type="button" class="btn-outline">
-              <span aria-hidden="true">📋</span> চ্যালেঞ্জ কপি
+              <span aria-hidden="true">⚔️</span> চ্যালেঞ্জ লিংক কপি
             </button>
             <button id="btn-open-lb-gameover" type="button" class="btn-outline">
               <span aria-hidden="true">🏅</span> পয়েন্ট টেবিল
@@ -213,32 +332,13 @@
                 <th scope="col">র‍্যাংক</th>
                 <th scope="col">ওস্তাদের নাম</th>
                 <th scope="col">পয়েন্ট</th>
-                <th scope="col">স্টপ ও দূরত্ব</th>
-                <th scope="col">পদ্মা সেতু</th>
+                <th scope="col">লোকেশন ও দূরত্ব</th>
+                <th scope="col">সেতু পার</th>
               </tr>
             </thead>
             <tbody id="lb-tbody"></tbody>
           </table>
         </div>
-      </dialog>
-
-      <!-- 4. Settings Dialog -->
-      <dialog id="settings-dialog" closedby="any" aria-labelledby="settings-title">
-        <div class="dialog-header">
-          <h1 id="settings-title"><span aria-hidden="true">⚙️</span> গেম সেটিংস</h1>
-          <form method="dialog">
-            <button type="submit" class="close-btn" value="close" aria-label="সেটিংস বন্ধ করুন" autofocus>✕</button>
-          </form>
-        </div>
-        <div class="settings-rows">
-          <label class="toggle-row">
-            <span><span aria-hidden="true">🔊</span> ইঞ্জিন ও হাইড্রোলিক হর্ন সাউন্ড</span>
-            <input id="toggle-sfx" type="checkbox" checked />
-          </label>
-        </div>
-        <button id="btn-reset-save" type="button" class="btn-outline">
-          <span aria-hidden="true">🔄</span> সব ডাটা রিসেট করুন
-        </button>
       </dialog>
     </main>
 

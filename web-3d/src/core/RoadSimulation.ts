@@ -1,3 +1,12 @@
+import {
+  BD_ROUTE_SEGMENTS,
+  FULL_ROUTE_M,
+  sampleRouteState,
+  type BiomeKind,
+  type BridgeStyle,
+  type RouteSegment,
+} from './BangladeshRoute';
+
 export type RoadEntityKind =
   | 'plastic_sedan'
   | 'deshi_tesla'
@@ -24,6 +33,18 @@ export interface RoadEntity {
   hitResolved: boolean;
   hornDodged: boolean;
   dodgeTargetX: number | null;
+  tollFee?: number;
+  tollLabel?: string;
+}
+
+export interface MiniMission {
+  id: string;
+  kind: 'chapani' | 'horn' | 'passenger' | 'tesla' | 'bridge';
+  title: string;
+  progress: number;
+  target: number;
+  rewardTaka: number;
+  rewardPts: number;
 }
 
 export interface SimEvent {
@@ -45,11 +66,18 @@ export interface SimEvent {
     | 'toll_fine'
     | 'bridge_complete'
     | 'fever_mode'
+    | 'wanted_up'
+    | 'wanted_cleared'
+    | 'mission_complete'
+    | 'train_passing'
+    | 'hub_unlocked'
+    | 'route_complete'
     | 'gameover';
   callout: string;
   takaDelta: number;
   x?: number;
   z?: number;
+  hubId?: string;
 }
 
 export interface InputState {
@@ -62,27 +90,25 @@ export interface InputState {
 export const ROAD_HALF_WIDTH = 6.2;
 export const LANE_CENTERS = [-4.5, -1.5, 1.5, 4.5] as const;
 
-export const LAP_LENGTH = 1600;
-export const BRIDGE_START_M = 800;
-export const BRIDGE_END_M = 1300;
+// Backwards-compatible Padma constants
+export const BRIDGE_START_M = 44200;
+export const BRIDGE_END_M = 47400;
 export const PADMA_TOLL_FEE = 250;
+export const DHAKA_STOPS = BD_ROUTE_SEGMENTS.map((s) => s.name);
 
-export const ROUTE_SEGMENTS = [
-  { startM: 0, endM: 200, name: 'মিরপুর ১০' },
-  { startM: 200, endM: 400, name: 'ফার্মগেট' },
-  { startM: 400, endM: 600, name: 'গুলিস্তান' },
-  { startM: 600, endM: 800, name: 'মাওয়া এক্সপ্রেসওয়ে' },
-  { startM: 800, endM: 1300, name: 'পদ্মা সেতু 🌉' },
-  { startM: 1300, endM: 1600, name: 'জাজিরা প্রান্ত' },
-] as const;
-
-export const DHAKA_STOPS = ROUTE_SEGMENTS.map((s) => s.name);
+const MISSION_TEMPLATES: Omit<MiniMission, 'progress'>[] = [
+  { id: 'm_chapani', kind: 'chapani', title: '৩টি গাড়িতে চাপানি মারুন', target: 3, rewardTaka: 280, rewardPts: 350 },
+  { id: 'm_horn', kind: 'horn', title: 'হর্ন দিয়ে ২টি গাড়ি সরান', target: 2, rewardTaka: 240, rewardPts: 300 },
+  { id: 'm_pax', kind: 'passenger', title: '৬ জন যাত্রী তুলুন', target: 6, rewardTaka: 300, rewardPts: 320 },
+  { id: 'm_tesla', kind: 'tesla', title: '২টি দেশি টেসলা ডজ দিন', target: 2, rewardTaka: 350, rewardPts: 420 },
+  { id: 'm_bridge', kind: 'bridge', title: '১টি সেতু পার হন', target: 1, rewardTaka: 400, rewardPts: 500 },
+];
 
 export function getViralTitle(score: number): string {
-  if (score >= 6000) return 'পদ্মা সেতু ও রাজপথের কিংবদন্তি 👑';
-  if (score >= 3500) return 'মিরপুর-মাওয়া মুড়ির টিন সম্রাট 🚌🔥';
-  if (score >= 1600) return 'ফার্মগেটের ওস্তাদ ড্রাইভার 💪';
-  if (score >= 700) return 'আগারগাঁওয়ের চাল্লু হেল্পার 📣';
+  if (score >= 12000) return 'অল বাংলাদেশ মুড়ির টিন সম্রাট 👑';
+  if (score >= 6000) return 'পদ্মা-যমুনা এক্সপ্রেস কিংবদন্তি 🌉🔥';
+  if (score >= 3000) return 'হাইওয়ে ওস্তাদ ড্রাইভার 💪';
+  if (score >= 1200) return 'আগারগাঁওয়ের চাল্লু হেল্পার 📣';
   return 'গুলিস্তানের নুব হেল্পার 😅';
 }
 
@@ -109,10 +135,36 @@ export class RoadSimulation {
   public hornCooldown = 0;
   public revivesUsed = 0;
 
+  // Explore Bangladesh Route, Slope & Weather State
+  public currentSegment: RouteSegment = BD_ROUTE_SEGMENTS[0];
+  public nextSegment: RouteSegment = BD_ROUTE_SEGMENTS[1];
+  public currentBiome: BiomeKind = 'north_bengal';
+  public activeBridgeStyle: BridgeStyle | null = null;
   public isOnPadmaBridge = false;
-  public bridgeBlend = 0; // 0 = Dhaka highway, 1 = Padma Setu over river
+  public isOnBridge = false;
+  public bridgeBlend = 0;
+  public flyoverBlend = 0;
+  public elevationY = 0;
+  public slopePitch = 0;
+  public timeOfDay = 0;
+  public rainIntensity = 0;
+  public headlightsOn = false;
+  public mapX = BD_ROUTE_SEGMENTS[0].mapX;
+  public mapY = BD_ROUTE_SEGMENTS[0].mapY;
   public totalTollPaid = 0;
+  public bridgesCrossed = 0;
   public padmaCrossings = 0;
+
+  // Wanted Stars & Mini-Missions & Passing Train
+  public wantedLevel = 0;
+  public wantedClearDist = 0;
+  public activeMission: MiniMission = { ...MISSION_TEMPLATES[0], progress: 0 };
+  private missionCursor = 0;
+
+  public trainActive = false;
+  public trainZ = -180;
+  public trainSpeed = 42;
+  private trainTimer = 14;
 
   public entities: RoadEntity[] = [];
   private nextEntityId = 1;
@@ -122,28 +174,30 @@ export class RoadSimulation {
   private rivalActive = false;
   private rivalTimer = 14;
 
-  private lastTollWarningLap = -1;
-  private lastTollSpawnLap = -1;
-  private lastBridgeCompleteLap = -1;
+  private warnedBridgeKeys = new Set<string>();
+  private spawnedGateKeys = new Set<string>();
+  private completedBridgeKeys = new Set<string>();
+  private announcedHubs = new Set<string>();
+  private completedLaps = 0;
 
   constructor(
     private readonly engineLevel = 1,
     private readonly armorLevel = 1,
     private readonly nitroLevel = 1
   ) {
-    this.reset();
+    this.reset(0);
   }
 
   public get speedKmh(): number {
     return Math.round(this.speed * 3.1);
   }
 
-  public reset(): void {
+  public reset(startDistanceM = 0): void {
     this.playerX = -1.5;
     this.playerVx = 0;
     this.speed = 24 + (this.engineLevel - 1) * 2.2;
     this.tiltAngle = 0;
-    this.distanceM = 0;
+    this.distanceM = Math.max(0, startDistanceM);
     this.score = 0;
     this.takaEarned = 0;
     this.passengers = 6;
@@ -154,17 +208,26 @@ export class RoadSimulation {
     this.feverActive = false;
     this.nitroCharge = 60;
     this.nitroActive = false;
-    this.maxHealth = 2 + this.armorLevel; // Lv1 = 3, Lv4 = 6
+    this.maxHealth = 2 + this.armorLevel;
     this.health = this.maxHealth;
     this.invulnTimer = 0;
     this.crashed = false;
     this.hornCooldown = 0;
     this.revivesUsed = 0;
 
-    this.isOnPadmaBridge = false;
-    this.bridgeBlend = 0;
     this.totalTollPaid = 0;
+    this.bridgesCrossed = 0;
     this.padmaCrossings = 0;
+
+    this.wantedLevel = 0;
+    this.wantedClearDist = 0;
+    this.missionCursor = 0;
+    this.activeMission = { ...MISSION_TEMPLATES[0], progress: 0 };
+
+    this.trainActive = false;
+    this.trainZ = -180;
+    this.trainSpeed = 42;
+    this.trainTimer = 12;
 
     this.entities = [];
     this.spawnTimer = 0.45;
@@ -173,14 +236,52 @@ export class RoadSimulation {
     this.rivalActive = false;
     this.rivalTimer = 12;
 
-    this.lastTollWarningLap = -1;
-    this.lastTollSpawnLap = -1;
-    this.lastBridgeCompleteLap = -1;
+    this.warnedBridgeKeys.clear();
+    this.spawnedGateKeys.clear();
+    this.completedBridgeKeys.clear();
+    this.announcedHubs.clear();
+    this.completedLaps = Math.floor(this.distanceM / FULL_ROUTE_M);
 
-    // Seed initial readable Dhaka traffic ahead so road feels alive immediately
+    // Pre-mark segments strictly before startDistanceM as already completed so Fast Travel doesn't immediately award past bridges
+    const lapIdx = Math.floor(this.distanceM / FULL_ROUTE_M);
+    const lapDist = this.distanceM % FULL_ROUTE_M;
+    for (const seg of BD_ROUTE_SEGMENTS) {
+      if (seg.biome === 'river_bridge' && seg.endM <= lapDist) {
+        const key = `${lapIdx}:${seg.id}`;
+        this.warnedBridgeKeys.add(key);
+        this.spawnedGateKeys.add(key);
+        this.completedBridgeKeys.add(key);
+      }
+    }
+
+    this.syncRouteSample(true);
+
+    // Seed initial readable traffic ahead
     this.spawnTrafficVehicle(-34, 2, 'plastic_sedan');
     this.spawnTrafficVehicle(-56, 1, 'cng');
     this.spawnTrafficVehicle(-78, 3, 'plastic_sedan');
+  }
+
+  private syncRouteSample(snapBlend = false): void {
+    const sample = sampleRouteState(this.distanceM);
+    this.currentSegment = sample.segment;
+    this.nextSegment = sample.nextSegment;
+    this.currentBiome = sample.segment.biome;
+    this.activeBridgeStyle = sample.segment.bridgeStyle ?? null;
+    this.isOnBridge = sample.segment.biome === 'river_bridge';
+    this.isOnPadmaBridge = sample.segment.id === 'padma_bridge';
+    this.elevationY = sample.elevationY;
+    this.slopePitch = sample.slopePitch;
+    this.timeOfDay = sample.timeOfDay;
+    this.rainIntensity = sample.rainIntensity;
+    this.headlightsOn = sample.headlightsOn;
+    this.mapX = sample.mapX;
+    this.mapY = sample.mapY;
+
+    if (snapBlend) {
+      this.bridgeBlend = this.isOnBridge ? 1 : 0;
+      this.flyoverBlend = this.currentBiome === 'flyover' ? 1 : 0;
+    }
   }
 
   public revive(): boolean {
@@ -189,24 +290,34 @@ export class RoadSimulation {
     this.crashed = false;
     this.health = Math.max(2, Math.ceil(this.maxHealth / 2));
     this.invulnTimer = 2.6;
-    // Clear immediate hazards right around player (keep toll gate ahead if distant)
     this.entities = this.entities.filter((e) => e.z < -28 || e.z > 10);
     return true;
   }
 
-  private getSegmentIndex(): number {
-    const lapDist = this.distanceM % LAP_LENGTH;
-    const idx = ROUTE_SEGMENTS.findIndex((s) => lapDist >= s.startM && lapDist < s.endM);
-    return idx >= 0 ? idx : 0;
-  }
-
   public getCurrentStopName(): string {
-    return ROUTE_SEGMENTS[this.getSegmentIndex()].name;
+    return this.currentSegment.name;
   }
 
   public getNextStopName(): string {
-    const nextIdx = (this.getSegmentIndex() + 1) % ROUTE_SEGMENTS.length;
-    return ROUTE_SEGMENTS[nextIdx].name;
+    return this.nextSegment.name;
+  }
+
+  private advanceMission(kind: MiniMission['kind'], amount: number, events: SimEvent[]): void {
+    if (this.activeMission.kind !== kind) return;
+    this.activeMission.progress += amount;
+    if (this.activeMission.progress >= this.activeMission.target) {
+      const done = this.activeMission;
+      this.score += done.rewardPts;
+      this.takaEarned += done.rewardTaka;
+      this.nitroCharge = Math.min(100, this.nitroCharge + 25);
+      events.push({
+        type: 'mission_complete',
+        callout: `🎯 মিশন কমপ্লিট: ${done.title}! +${done.rewardTaka} ৳`,
+        takaDelta: done.rewardTaka,
+      });
+      this.missionCursor = (this.missionCursor + 1) % MISSION_TEMPLATES.length;
+      this.activeMission = { ...MISSION_TEMPLATES[this.missionCursor], progress: 0 };
+    }
   }
 
   public blastHorn(): SimEvent[] {
@@ -264,11 +375,17 @@ export class RoadSimulation {
         callout: `হর্ন শুনে সাইড দিছে! +${bonusTaka} ৳`,
         takaDelta: bonusTaka,
       });
+      this.advanceMission('horn', movedCount, events);
     }
     return events;
   }
 
-  public step(dt: number, input: InputState, rand: () => number = Math.random): SimEvent[] {
+  public step(
+    dt: number,
+    input: InputState,
+    rand: () => number = Math.random,
+    steerSensitivity = 1.0
+  ): SimEvent[] {
     if (this.crashed) return [];
     const safeDt = Math.min(0.05, Math.max(0.001, dt));
     const events: SimEvent[] = [];
@@ -298,70 +415,161 @@ export class RoadSimulation {
       this.nitroCharge = Math.min(100, this.nitroCharge + 2.6 * safeDt);
     }
 
-    // Forward Speed Dynamics
-    const progressBonus = Math.min(20, this.distanceM * 0.0055);
-    const baseCruise = 25 + (this.engineLevel - 1) * 2.5 + progressBonus + (this.isOnPadmaBridge ? 3.0 : 0);
+    // Forward Speed Dynamics + Slope & Bridge Feel
+    const progressBonus = Math.min(20, this.distanceM * 0.0012);
+    const baseCruise =
+      25 +
+      (this.engineLevel - 1) * 2.5 +
+      progressBonus +
+      (this.isOnBridge || this.currentBiome === 'flyover' ? 2.8 : 0);
     let targetSpeed = baseCruise;
     if (input.accelerate) targetSpeed += 8.5;
     if (input.brake) targetSpeed = Math.max(11, baseCruise - 12);
     if (this.nitroActive) targetSpeed += 19 + (this.nitroLevel - 1) * 2;
+    // Climbing uphill slightly loads the engine, descending gives gravity boost
+    targetSpeed -= this.slopePitch * 22;
 
     this.speed += (targetSpeed - this.speed) * Math.min(1, safeDt * 5.5);
     const dz = this.speed * safeDt;
     this.distanceM += dz;
-    const scoreMult = this.feverActive ? 1.5 : 1;
-    this.score += Math.floor(dz * 1.6 * scoreMult);
 
-    // Bridge State & Padma Toll Lifecycle
-    const lapIndex = Math.floor(this.distanceM / LAP_LENGTH);
-    const lapDist = this.distanceM % LAP_LENGTH;
-    this.isOnPadmaBridge = lapDist >= BRIDGE_START_M && lapDist < BRIDGE_END_M;
+    const feverMult = this.feverActive ? 1.5 : 1;
+    const wantedMult = 1 + this.wantedLevel * 0.35;
+    const rainMult = this.rainIntensity > 0.3 ? 1.35 : 1;
+    this.score += Math.floor(dz * 1.6 * feverMult * wantedMult * rainMult);
 
-    const targetBlend =
-      lapDist >= BRIDGE_START_M - 35 && lapDist < BRIDGE_END_M - 15 ? 1 : 0;
-    this.bridgeBlend += (targetBlend - this.bridgeBlend) * Math.min(1, safeDt * 2.2);
+    // Route & Elevation Sample
+    const prevLap = this.completedLaps;
+    const sample = sampleRouteState(this.distanceM);
+    this.syncRouteSample(false);
 
-    if (lapDist >= 645 && lapDist < 720 && this.lastTollWarningLap < lapIndex) {
-      this.lastTollWarningLap = lapIndex;
+    const targetBridgeBlend = sample.segment.biome === 'river_bridge' ? 1 : 0;
+    this.bridgeBlend += (targetBridgeBlend - this.bridgeBlend) * Math.min(1, safeDt * 2.4);
+    const targetFlyoverBlend = sample.segment.biome === 'flyover' ? 1 : 0;
+    this.flyoverBlend += (targetFlyoverBlend - this.flyoverBlend) * Math.min(1, safeDt * 2.4);
+
+    // Hub Unlock notification
+    if (sample.segment.isHub && !this.announcedHubs.has(sample.segment.id)) {
+      this.announcedHubs.add(sample.segment.id);
+      if (sample.segment.id !== 'thakurgaon') {
+        events.push({
+          type: 'hub_unlocked',
+          callout: `📍 ${sample.segment.name} পৌঁছালেন! (${sample.segment.tagline})`,
+          takaDelta: 0,
+          hubId: sample.segment.id,
+        });
+      }
+    }
+
+    // Grand Cox's Bazar Finish on lap rollover
+    if (sample.lapIndex > prevLap) {
+      this.completedLaps = sample.lapIndex;
+      this.score += 2000;
+      this.takaEarned += 1000;
+      this.nitroCharge = 100;
       events.push({
-        type: 'toll_approaching',
-        callout: `🌉 সামনে পদ্মা সেতু টোল প্লাজা! টোল ৳${PADMA_TOLL_FEE} (অথবা 🔥 নাইট্রো!)`,
+        type: 'route_complete',
+        callout: '🏖️ ঠাকুরগাঁও ➔ কক্সবাজার ফুল ট্রিপ কমপ্লিট! +১,০০০ ৳ ও +২,০০০ পয়েন্ট!',
+        takaDelta: 1000,
+      });
+    }
+
+    // 5-Bridge Toll Plaza & Completion Lifecycle
+    for (const seg of BD_ROUTE_SEGMENTS) {
+      if (seg.biome !== 'river_bridge') continue;
+      const key = `${sample.lapIndex}:${seg.id}`;
+      const tollFee = seg.tollFee ?? 250;
+
+      if (
+        sample.lapDist >= seg.startM - 175 &&
+        sample.lapDist < seg.startM - 10 &&
+        !this.warnedBridgeKeys.has(key)
+      ) {
+        this.warnedBridgeKeys.add(key);
+        events.push({
+          type: 'toll_approaching',
+          callout: `🌉 সামনে ${seg.name} টোল প্লাজা! (টোল ৳${tollFee} অথবা 🔥 নাইট্রো!)`,
+          takaDelta: 0,
+        });
+      }
+
+      if (
+        sample.lapDist >= seg.startM - 140 &&
+        sample.lapDist < seg.startM - 15 &&
+        !this.spawnedGateKeys.has(key)
+      ) {
+        this.spawnedGateKeys.add(key);
+        const gateZ = -(seg.startM - sample.lapDist);
+        this.entities = this.entities.filter((e) => Math.abs(e.z - gateZ) > 22);
+        const gate = this.spawnEntity('toll_gate', 0, gateZ, ROAD_HALF_WIDTH, 1.5, 0, 0);
+        gate.tollFee = tollFee;
+        gate.tollLabel = seg.name;
+      }
+
+      if (
+        sample.lapDist >= seg.endM &&
+        sample.lapDist < seg.endM + 120 &&
+        !this.completedBridgeKeys.has(key)
+      ) {
+        this.completedBridgeKeys.add(key);
+        this.bridgesCrossed += 1;
+        this.padmaCrossings += 1;
+        const bonusPts = 600;
+        const bonusTaka = 300;
+        this.score += bonusPts;
+        this.takaEarned += bonusTaka;
+        this.nitroCharge = Math.min(100, this.nitroCharge + 30);
+        events.push({
+          type: 'bridge_complete',
+          callout: `🌉 ${seg.name} পার! +${bonusTaka} ৳ ও +${bonusPts} পয়েন্ট!`,
+          takaDelta: bonusTaka,
+        });
+        this.advanceMission('bridge', 1, events);
+      }
+    }
+
+    // Wanted Star clear check
+    if (this.wantedLevel > 0 && this.distanceM >= this.wantedClearDist) {
+      this.wantedLevel = 0;
+      this.score += 500;
+      events.push({
+        type: 'wanted_cleared',
+        callout: '🚓 হাইওয়ে পুলিশকে ফাঁকি দিছেন! Wanted Cleared +500 pts!',
         takaDelta: 0,
       });
     }
 
-    if (lapDist >= 675 && lapDist < BRIDGE_START_M - 15 && this.lastTollSpawnLap < lapIndex) {
-      this.lastTollSpawnLap = lapIndex;
-      const gateZ = -(BRIDGE_START_M - lapDist);
-      // Clear overlapping hazards right around the toll gate lane
-      this.entities = this.entities.filter((e) => Math.abs(e.z - gateZ) > 22);
-      this.spawnEntity('toll_gate', 0, gateZ, ROAD_HALF_WIDTH, 1.5, 0, 0);
+    // Passing Bangladesh Railway Train beside bridges & highways
+    if (this.trainActive) {
+      this.trainZ += (dz + this.trainSpeed * safeDt);
+      if (this.trainZ > 110) {
+        this.trainActive = false;
+        this.trainTimer = 16 + rand() * 12;
+      }
+    } else {
+      this.trainTimer -= safeDt;
+      if (this.trainTimer <= 0 && (sample.segment.hasParallelRail || this.isOnBridge)) {
+        this.trainActive = true;
+        this.trainZ = -190;
+        this.trainSpeed = 32 + rand() * 16;
+        this.trainTimer = 20 + rand() * 12;
+        events.push({
+          type: 'train_passing',
+          callout: '🚆 পাশে বাংলাদেশ রেলওয়ে এক্সপ্রেস ছুটছে!',
+          takaDelta: 0,
+        });
+      }
     }
 
-    if (lapDist >= BRIDGE_END_M && this.lastBridgeCompleteLap < lapIndex) {
-      this.lastBridgeCompleteLap = lapIndex;
-      this.padmaCrossings += 1;
-      const bonusPts = 600;
-      const bonusTaka = 300;
-      this.score += bonusPts;
-      this.takaEarned += bonusTaka;
-      this.nitroCharge = Math.min(100, this.nitroCharge + 30);
-      events.push({
-        type: 'bridge_complete',
-        callout: `🌉 পদ্মা সেতু পার! +${bonusTaka} ৳ ও +${bonusPts} পয়েন্ট!`,
-        takaDelta: bonusTaka,
-      });
-    }
-
-    // Smooth lateral steering + Overload Tilt + Padma Crosswind Physics!
-    const steerAccel = 48;
+    // Smooth lateral steering + Rain Slippery Grip + Overload Tilt + Crosswind
+    const grip = this.rainIntensity > 0.35 ? 0.015 : 0.002;
+    const steerAccel = 48 * Math.max(0.6, Math.min(1.6, steerSensitivity));
     if (Math.abs(input.steer) > 0.02) {
       this.playerVx += input.steer * steerAccel * safeDt;
     } else {
-      this.playerVx *= Math.pow(0.002, safeDt);
+      this.playerVx *= Math.pow(grip, safeDt);
     }
-    if (this.isOnPadmaBridge && Math.abs(input.steer) < 0.05) {
-      // Gentle Padma river crosswind sway on the bridge
+    if (this.isOnBridge && Math.abs(input.steer) < 0.05) {
       this.playerVx += Math.sin(this.distanceM * 0.045) * 3.2 * safeDt;
     }
 
@@ -378,7 +586,6 @@ export class RoadSimulation {
       this.playerVx = Math.min(0, this.playerVx);
     }
 
-    // More passengers = heavier roof sway / Murir Tin body roll!
     const overloadFactor = 1 + Math.min(1.4, (this.passengers - 4) * 0.055);
     const targetTilt = (-this.playerVx / maxLatSpeed) * 0.16 * overloadFactor;
     this.tiltAngle += (targetTilt - this.tiltAngle) * Math.min(1, safeDt * 10);
@@ -386,12 +593,12 @@ export class RoadSimulation {
     // Spawn traffic & Dhaka chaos events
     this.spawnTimer -= safeDt;
     if (this.spawnTimer <= 0) {
-      const difficultyRate = Math.max(0.45, 0.90 - this.distanceM * 0.00016);
+      const difficultyRate = Math.max(0.42, 0.90 - this.distanceM * 0.000018);
       this.spawnTimer = difficultyRate * (0.82 + rand() * 0.42);
       this.spawnRandomRoadHazard(rand);
     }
 
-    if (!this.isOnPadmaBridge) {
+    if (!this.isOnBridge && this.currentBiome !== 'flyover') {
       this.stopTimer -= safeDt;
       if (this.stopTimer <= 0) {
         this.stopTimer = 7.5 + rand() * 3.5;
@@ -403,10 +610,10 @@ export class RoadSimulation {
 
     this.pickupTimer -= safeDt;
     if (this.pickupTimer <= 0) {
-      this.pickupTimer = 8.0 + rand() * 4.0;
+      this.pickupTimer = 7.5 + rand() * 4.0;
       const lane = Math.floor(rand() * 4);
       if (this.isZoneClear(-130, lane)) {
-        const kind: RoadEntityKind = rand() < 0.45 ? 'wrench_pickup' : 'nitro_pickup';
+        const kind: RoadEntityKind = rand() < 0.48 ? 'wrench_pickup' : 'nitro_pickup';
         this.spawnEntity(kind, LANE_CENTERS[lane], -130, 0.9, 0.9, 0, lane);
       }
     }
@@ -487,37 +694,53 @@ export class RoadSimulation {
     return events;
   }
 
+  private raiseWanted(events: SimEvent[]): void {
+    const prev = this.wantedLevel;
+    this.wantedLevel = Math.min(3, this.wantedLevel + 1);
+    this.wantedClearDist = this.distanceM + 360;
+    if (this.wantedLevel > prev) {
+      events.push({
+        type: 'wanted_up',
+        callout: `⭐ ওয়ান্টেড লেভেল ${this.wantedLevel}! (${(1 + this.wantedLevel * 0.35).toFixed(2)}x পয়েন্ট!)`,
+        takaDelta: 0,
+      });
+    }
+  }
+
   private handleOverlap(ent: RoadEntity, events: SimEvent[], rand: () => number): void {
     if (ent.kind === 'toll_gate') {
+      const fee = ent.tollFee ?? PADMA_TOLL_FEE;
+      const label = ent.tollLabel ?? 'পদ্মা সেতু';
+
       if (this.nitroActive) {
         const pts = 550;
         this.score += pts;
         this.chapaniCombo += 1;
         this.comboTimer = 4.5;
-        // Sergeant chases ahead on the bridge!
         const edgeLane = this.playerX < 0 ? 3 : 0;
         this.spawnEntity('sergeant', LANE_CENTERS[edgeLane], -70, 0.65, 0.65, 0, edgeLane);
         events.push({
           type: 'toll_smash',
-          callout: `🔥 টোল ব্যারিকেড ভেঙে পদ্মা সেতুতে উড়াল! (+${pts} pts)`,
+          callout: `🔥 টোল ব্যারিকেড ভেঙে ${label}-তে উড়াল! (+${pts} pts)`,
           takaDelta: 0,
           x: this.playerX,
           z: ent.z,
         });
+        this.raiseWanted(events);
         return;
       }
 
-      if (this.takaEarned >= PADMA_TOLL_FEE) {
-        this.takaEarned -= PADMA_TOLL_FEE;
-        this.totalTollPaid += PADMA_TOLL_FEE;
+      if (this.takaEarned >= fee) {
+        this.takaEarned -= fee;
+        this.totalTollPaid += fee;
         const pts = this.feverActive ? 600 : 400;
         this.score += pts;
         this.nitroCharge = Math.min(100, this.nitroCharge + 35);
         this.speed += 3;
         events.push({
           type: 'toll_paid',
-          callout: `🌉 পদ্মা সেতু টোল ৳${PADMA_TOLL_FEE} পরিশোধ! +${pts} পয়েন্ট`,
-          takaDelta: -PADMA_TOLL_FEE,
+          callout: `🌉 ${label} টোল ৳${fee} পরিশোধ! +${pts} পয়েন্ট`,
+          takaDelta: -fee,
           x: this.playerX,
           z: ent.z,
         });
@@ -539,7 +762,7 @@ export class RoadSimulation {
         this.crashed = true;
         events.push({
           type: 'gameover',
-          callout: 'টোল না দিয়ে ব্যারিকেডে ধাক্কা! মুড়ির টিন শেষ 💥',
+          callout: `টোল (৳${fee}) না দিয়ে ব্যারিকেডে ধাক্কা! মুড়ির টিন শেষ 💥`,
           takaDelta: -seized,
           x: this.playerX,
           z: 0,
@@ -547,7 +770,7 @@ export class RoadSimulation {
       } else {
         events.push({
           type: 'toll_fine',
-          callout: `🚧 ভাড়া কম (টোল ৳${PADMA_TOLL_FEE})! ব্যারিকেডে ধাক্কা (-১ 🔧)`,
+          callout: `🚧 ভাড়া কম (টোল ৳${fee})! ব্যারিকেডে ধাক্কা (-১ ❤️)`,
           takaDelta: -seized,
           x: this.playerX,
           z: ent.z,
@@ -569,19 +792,32 @@ export class RoadSimulation {
         x: ent.x,
         z: ent.z,
       });
+      this.advanceMission('passenger', boarded, events);
       return;
     }
 
     if (ent.kind === 'wrench_pickup') {
-      this.health = Math.min(this.maxHealth, this.health + 1);
-      this.score += 100;
-      events.push({
-        type: 'wrench_heal',
-        callout: 'ধোলাইখাল মিস্ত্রি রিপেয়ার! +১ 🔧',
-        takaDelta: 0,
-        x: ent.x,
-        z: ent.z,
-      });
+      if (this.health < this.maxHealth) {
+        this.health = Math.min(this.maxHealth, this.health + 1);
+        this.score += 100;
+        events.push({
+          type: 'wrench_heal',
+          callout: 'ধোলাইখাল গিয়ার-রিপেয়ার! বাসের লাইফ +১ ⚙️',
+          takaDelta: 0,
+          x: ent.x,
+          z: ent.z,
+        });
+      } else {
+        this.score += 200;
+        this.nitroCharge = Math.min(100, this.nitroCharge + 25);
+        events.push({
+          type: 'wrench_heal',
+          callout: 'ফুল হেলথ সার্ভিস বোনাস! +২০০ pts ⚙️',
+          takaDelta: 0,
+          x: ent.x,
+          z: ent.z,
+        });
+      }
       ent.z = 999;
       return;
     }
@@ -611,9 +847,11 @@ export class RoadSimulation {
           x: ent.x,
           z: ent.z,
         });
+        this.raiseWanted(events);
       } else {
-        const fine = Math.min(this.takaEarned, 120);
+        const fine = Math.min(this.takaEarned, 120 + this.wantedLevel * 40);
         this.takaEarned -= fine;
+        this.wantedLevel = Math.max(0, this.wantedLevel - 1);
         events.push({
           type: 'sergeant_fine',
           callout: `মামলা খাইছি ওস্তাদ! -${fine} ৳`,
@@ -639,7 +877,6 @@ export class RoadSimulation {
       return;
     }
 
-    // Real vehicle / pit collision!
     if (this.invulnTimer > 0) return;
 
     if (this.nitroActive) {
@@ -674,7 +911,7 @@ export class RoadSimulation {
     } else {
       events.push({
         type: 'crash',
-        callout: 'রাস্তা কি তোর বাপের?! (-১ 🔧)',
+        callout: 'রাস্তা কি তোর বাপের?! (-১ লাইফ)',
         takaDelta: 0,
         x: ent.x,
         z: ent.z,
@@ -690,11 +927,12 @@ export class RoadSimulation {
       this.feverActive = true;
     }
     const feverMult = this.feverActive ? 1.5 : 1;
+    const wantedMult = 1 + this.wantedLevel * 0.35;
     const nitroMult = 1 + (this.nitroLevel - 1) * 0.15;
 
     if (ent.kind === 'deshi_tesla') {
       this.teslaDodges += 1;
-      const reward = Math.round((200 + this.chapaniCombo * 40) * nitroMult * feverMult);
+      const reward = Math.round((200 + this.chapaniCombo * 40) * nitroMult * feverMult * wantedMult);
       this.score += reward;
       this.takaEarned += reward;
       this.nitroCharge = Math.min(100, this.nitroCharge + 26);
@@ -705,10 +943,11 @@ export class RoadSimulation {
         x: ent.x,
         z: ent.z,
       });
+      this.advanceMission('tesla', 1, events);
     } else {
       this.plasticScrapes += 1;
       const isLeft = ent.x < this.playerX;
-      const reward = Math.round((130 + this.chapaniCombo * 35) * nitroMult * feverMult);
+      const reward = Math.round((130 + this.chapaniCombo * 35) * nitroMult * feverMult * wantedMult);
       this.score += reward;
       this.takaEarned += reward;
       this.nitroCharge = Math.min(100, this.nitroCharge + 22);
@@ -720,6 +959,7 @@ export class RoadSimulation {
         x: ent.x,
         z: ent.z,
       });
+      this.advanceMission('chapani', 1, events);
     }
 
     if (!wasFever && this.feverActive) {
@@ -746,7 +986,6 @@ export class RoadSimulation {
 
     if (!this.isZoneClear(z, lane)) return;
 
-    // Guarantee at least 2 escape lanes remain clear in every 22m Z-band
     const blockedLanes = new Set<number>();
     for (const e of this.entities) {
       if (e.kind !== 'bus_stop' && e.kind !== 'wrench_pickup' && e.kind !== 'nitro_pickup' && Math.abs(e.z - z) < 22) {
@@ -756,15 +995,16 @@ export class RoadSimulation {
     if (blockedLanes.size >= 2) return;
 
     const roll = rand();
+    const sergeantThreshold = this.wantedLevel > 0 ? 0.86 : 0.94;
     if (roll < 0.34) {
       this.spawnTrafficVehicle(z, lane, 'plastic_sedan');
     } else if (roll < 0.56) {
       this.spawnTrafficVehicle(z, lane, 'cng');
     } else if (roll < 0.74) {
       this.spawnEntity('deshi_tesla', LANE_CENTERS[lane], z, 0.7, 1.15, -13 - rand() * 5, lane);
-    } else if (roll < 0.88) {
+    } else if (roll < 0.88 && this.wantedLevel === 0) {
       this.spawnTrafficVehicle(z, lane, 'cargo_truck');
-    } else if (!this.isOnPadmaBridge && roll < 0.94) {
+    } else if (!this.isOnBridge && this.currentBiome !== 'flyover' && roll < sergeantThreshold) {
       this.spawnEntity('wasa_pit', LANE_CENTERS[lane], z, 1.15, 1.0, 0, lane);
     } else {
       const edgeLane = rand() < 0.5 ? 0 : 3;
