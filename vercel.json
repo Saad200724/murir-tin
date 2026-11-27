@@ -2,5 +2,18 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "npm install && npm --prefix web-3d install",
   "buildCommand": "npm run build",
-  "outputDirectory": "build/webgl"
+  "outputDirectory": "build/webgl",
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "murir-tin-peach\\.vercel\\.app"
+        }
+      ],
+      "destination": "https://murirtin-express.vercel.app/:path*",
+      "permanent": true
+    }
+  ]
 }
