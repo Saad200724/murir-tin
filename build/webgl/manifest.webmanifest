@@ -1,0 +1,11 @@
+{
+  "name": "মুড়ির টিন 3D — Murir Tin",
+  "short_name": "Murir Tin 3D",
+  "description": "ওস্তাদ বাম প্লাস্টিক! Dhaka Local Bus Chapani & Traffic Chaos 3D Game.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1b1f2a",
+  "theme_color": "#ffbe0b",
+  "icons": []
+}

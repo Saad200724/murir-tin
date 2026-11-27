@@ -1,0 +1,6 @@
+node_modules/
+web-3d/node_modules/
+.vercel/
+.DS_Store
+Thumbs.db
+*.log

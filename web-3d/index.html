@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="bn">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#ffbe0b" />
+    <meta name="description" content="মুড়ির টিন 3D — ওস্তাদ বাম প্লাস্টিক! ঢাকার রাস্তায় লোকাল বাস চালানোর সেরা ৩ডি ওয়েব গেম!" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <title>মুড়ির টিন 3D — ওস্তাদ বাম প্লাস্টিক!</title>
+  </head>
+  <body>
+    <main id="app">
+      <!-- 3D Dhaka Highway Stage -->
+      <section id="game-stage" aria-label="Murir Tin 3D Dhaka Highway"></section>
+
+      <!-- Top HUD -->
+      <header id="top-hud" class="hud-bar">
+        <div class="hud-left">
+          <div class="pill pill-taka" aria-live="polite">
+            <span aria-hidden="true">৳</span>
+            <strong id="hud-taka">250</strong>
+          </div>
+          <div class="pill pill-score" aria-live="polite">
+            <span aria-hidden="true">🏆</span>
+            <strong id="hud-score">0</strong>
+          </div>
+          <div class="pill pill-health" id="hud-health" aria-label="Bus wrench health">🔧🔧🔧</div>
+          <div class="pill pill-pax" title="বাদুড়ঝোলা যাত্রী">
+            <span aria-hidden="true">👥</span>
+            <strong id="hud-pax">6</strong>
+          </div>
+        </div>
+
+        <div class="hud-route">
+          <span id="hud-stop-label" class="stop-badge">📍 মিরপুর ১০ ➔ কাজীপাড়া</span>
+          <div class="nitro-track" aria-label="Nitro charge">
+            <div id="hud-nitro-fill" class="nitro-fill"></div>
+          </div>
+        </div>
+
+        <div class="hud-right">
+          <button id="btn-garage" type="button" class="icon-btn" aria-label="ধোলাইখাল গ্যারেজ" title="গ্যারেজ">
+            <span aria-hidden="true">🔧</span>
+          </button>
+          <button id="btn-settings" type="button" class="icon-btn" aria-label="সেটিংস" title="সেটিংস">
+            <span aria-hidden="true">⚙️</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Helper Shout Callout Banner -->
+      <aside id="helper-callout" class="helper-callout hidden" aria-live="polite">
+        <span aria-hidden="true">📣</span>
+        <strong id="helper-callout-text">বাম প্লাস্টিক ক্লিয়ার!</strong>
+      </aside>
+
+      <!-- Bottom Driving Controls (Touch + Desktop Friendly) -->
+      <footer id="drive-controls" class="drive-controls hidden">
+        <div class="steer-pad">
+          <button id="btn-left" type="button" class="ctrl-btn steer-btn" aria-label="বামে চাপান">
+            <span aria-hidden="true">◀</span> বামে
+          </button>
+          <button id="btn-right" type="button" class="ctrl-btn steer-btn" aria-label="ডানে চাপান">
+            ডানে <span aria-hidden="true">▶</span>
+          </button>
+        </div>
+
+        <div class="action-pad">
+          <button id="btn-horn" type="button" class="ctrl-btn horn-btn" aria-label="হর্ন বাজান">
+            <span aria-hidden="true">📢</span> হর্ন
+          </button>
+          <button id="btn-brake" type="button" class="ctrl-btn brake-btn" aria-label="ব্রেক ধরুন">
+            <span aria-hidden="true">🛑</span> ব্রেক
+          </button>
+          <button id="btn-nitro" type="button" class="ctrl-btn nitro-btn" aria-label="নাইট্রো টান দিন">
+            <span aria-hidden="true">🔥</span> নাইট্রো
+          </button>
+        </div>
+      </footer>
+
+      <!-- Title / Splash Screen -->
+      <section id="title-overlay" class="title-overlay" aria-labelledby="title-heading">
+        <div class="title-card">
+          <div class="rickshaw-badge">ব্রেক নাই • লুকিং গ্লাস নাই</div>
+          <h1 id="title-heading">মুড়ির টিন 3D</h1>
+          <p class="title-sub">
+            প্রাইভেট কারের বাম পাশ ঘষে <strong>চাপানি</strong> মারো, উল্টা পথের <strong>দেশি টেসলা</strong> কাটাও, আর রানিংয়ে যাত্রী তোলো!
+          </p>
+          <div class="title-best">
+            <span>সেরা স্কোর: <strong id="title-best-score">0</strong></span>
+            <span>জমা ভাড়া: <strong id="title-total-taka">৳ 250</strong></span>
+          </div>
+          <div class="title-actions">
+            <button id="btn-start-drive" type="button" class="btn-primary btn-big">
+              <span aria-hidden="true">🚌</span> টান দেন ওস্তাদ! (PLAY)
+            </button>
+            <button id="btn-open-garage-title" type="button" class="btn-secondary">
+              <span aria-hidden="true">🔧</span> ধোলাইখাল গ্যারেজ ও বাস স্কিন
+            </button>
+          </div>
+          <p class="controls-tip">কীবোর্ড: <strong>A/D</strong> বা <strong>◀/▶</strong> চাপানো • <strong>Space</strong> হর্ন • <strong>Shift</strong> নাইট্রো</p>
+        </div>
+      </section>
+
+      <!-- 1. Dholaikhal Garage & Skins Dialog -->
+      <dialog id="garage-dialog" closedby="any" aria-labelledby="garage-title">
+        <div class="dialog-header">
+          <h1 id="garage-title"><span aria-hidden="true">🔧</span> ধোলাইখাল গ্যারেজ</h1>
+          <form method="dialog">
+            <button type="submit" class="close-btn" value="close" aria-label="গ্যারেজ বন্ধ করুন" autofocus>✕</button>
+          </form>
+        </div>
+        <p class="garage-balance">আপনার ক্যাশ: <strong id="garage-taka">৳ 250</strong></p>
+        <h2 class="section-sub">বাস আপগ্রেড</h2>
+        <div id="upgrade-list" class="garage-grid"></div>
+        <h2 class="section-sub">লোকাল বাস স্কিন</h2>
+        <div id="skin-list" class="garage-grid" role="region" aria-label="Bus skins" tabindex="0"></div>
+      </dialog>
+
+      <!-- 2. Game Over Viral Meme Scorecard Dialog -->
+      <dialog id="gameover-dialog" closedby="none" aria-labelledby="gameover-title">
+        <div class="dialog-header">
+          <h1 id="gameover-title"><span aria-hidden="true">💥</span> ওস্তাদ, মুড়ির টিন উল্টায়ে গেছে!</h1>
+        </div>
+        <canvas id="scorecard-canvas" class="scorecard-preview" aria-label="Viral Meme Scorecard"></canvas>
+        <div class="gameover-actions">
+          <button id="btn-retry-now" type="button" class="btn-primary btn-big" autofocus>
+            <span aria-hidden="true">⚡</span> আবার টান দেন! (Instant Retry)
+          </button>
+          <button id="btn-revive-mistry" type="button" class="btn-secondary">
+            <span aria-hidden="true">🔧</span> ধোলাইখাল ফ্রি রিভাইভ (Keep Score!)
+          </button>
+          <div class="share-row">
+            <button id="btn-download-card" type="button" class="btn-outline">
+              <span aria-hidden="true">📥</span> মিম কার্ড ডাউনলোড
+            </button>
+            <button id="btn-copy-flex" type="button" class="btn-outline">
+              <span aria-hidden="true">📋</span> চ্যালেঞ্জ কপি
+            </button>
+          </div>
+          <p id="share-feedback" class="share-feedback" aria-live="polite"></p>
+        </div>
+      </dialog>
+
+      <!-- 3. Settings Dialog -->
+      <dialog id="settings-dialog" closedby="any" aria-labelledby="settings-title">
+        <div class="dialog-header">
+          <h1 id="settings-title"><span aria-hidden="true">⚙️</span> গেম সেটিংস</h1>
+          <form method="dialog">
+            <button type="submit" class="close-btn" value="close" aria-label="সেটিংস বন্ধ করুন" autofocus>✕</button>
+          </form>
+        </div>
+        <div class="settings-rows">
+          <label class="toggle-row">
+            <span><span aria-hidden="true">🔊</span> ইঞ্জিন ও হাইড্রোলিক হর্ন সাউন্ড</span>
+            <input id="toggle-sfx" type="checkbox" checked />
+          </label>
+          <label class="toggle-row">
+            <span><span aria-hidden="true">🗣️</span> হেল্পার ভয়েস ডায়লগ</span>
+            <input id="toggle-voice" type="checkbox" checked />
+          </label>
+        </div>
+        <button id="btn-reset-save" type="button" class="btn-outline">
+          <span aria-hidden="true">🔄</span> সব ডাটা রিসেট করুন
+        </button>
+      </dialog>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

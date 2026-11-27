@@ -1,0 +1,11 @@
+{
+  "name": "murir-tin-root",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix web-3d run dev",
+    "build": "npm --prefix web-3d run build",
+    "preview": "npm --prefix web-3d run preview",
+    "test": "npm --prefix web-3d run test",
+    "package": "npm --prefix web-3d run package"
+  }
+}

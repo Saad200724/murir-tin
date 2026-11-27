@@ -1,0 +1,26 @@
+{
+  "name": "murir-tin-3d",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Murir Tin 3D - Dhaka Local Bus Chapani & Traffic Chaos WebGL Game",
+  "type": "module",
+  "scripts": {
+    "generate:models": "node scripts/generate-dhaka-glb.mjs",
+    "dev": "vite --port 5174",
+    "build": "node scripts/generate-dhaka-glb.mjs && tsc --noEmit && vite build",
+    "preview": "vite preview --port 4174 --host 127.0.0.1",
+    "test": "vitest run",
+    "package": "node scripts/package-release.mjs"
+  },
+  "dependencies": {
+    "three": "^0.175.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.2.0",
+    "@capacitor/core": "^7.2.0",
+    "@types/three": "^0.175.0",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.0",
+    "vitest": "^3.0.9"
+  }
+}
