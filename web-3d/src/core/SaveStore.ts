@@ -26,7 +26,7 @@ export function createDefaultSave(): MurirTinSave {
     armorLevel: 1,
     nitroLevel: 1,
     soundEnabled: true,
-    voiceCalloutsEnabled: true,
+    voiceCalloutsEnabled: false,
   };
 }
 

@@ -10,11 +10,9 @@ export class DeshiAudioEngine {
   private engineOsc: OscillatorNode | null = null;
   private engineGain: GainNode | null = null;
   private soundEnabled = true;
-  private voiceEnabled = true;
 
-  public setPreferences(soundEnabled: boolean, voiceEnabled: boolean): void {
+  public setPreferences(soundEnabled: boolean): void {
     this.soundEnabled = soundEnabled;
-    this.voiceEnabled = voiceEnabled;
     if (!soundEnabled && this.engineGain && this.ctx) {
       this.engineGain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.05);
     }
@@ -151,20 +149,5 @@ export class DeshiAudioEngine {
     this.unlock();
     this.tone(140, 0.36, 'sawtooth', 0.24, 38, 0);
     this.tone(95, 0.42, 'square', 0.18, 32, 0.03);
-  }
-
-  public speakHelperLine(text: string): void {
-    if (!this.voiceEnabled || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-    try {
-      if (window.speechSynthesis.speaking) return;
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = 'bn-BD';
-      u.rate = 1.2;
-      u.pitch = 1.15;
-      u.volume = 0.7;
-      window.speechSynthesis.speak(u);
-    } catch {
-      // Ignore speech synthesis errors on headless browsers
-    }
   }
 }

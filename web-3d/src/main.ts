@@ -91,7 +91,7 @@ class MurirTinApp {
     this.sim = new RoadSimulation(s.engineLevel, s.armorLevel, s.nitroLevel);
     this.bankedTakaInRun = 0;
     this.scoreSubmittedForRun = false;
-    this.audio.setPreferences(s.soundEnabled, s.voiceCalloutsEnabled);
+    this.audio.setPreferences(s.soundEnabled);
   }
 
   private clearActiveInputs(): void {
@@ -178,7 +178,7 @@ class MurirTinApp {
       this.titleOverlay.classList.add('hidden');
       this.driveControls.classList.remove('hidden');
       this.isPlaying = true;
-      this.showCallout('ওস্তাদ বামে চাপান! পদ্মা সেতু টোল ৳২৫০ তুলুন!', true);
+      this.showCallout('ওস্তাদ বামে চাপান! পদ্মা সেতু টোল ৳২৫০ তুলুন!');
     };
 
     document.getElementById('btn-start-drive')!.addEventListener('click', startRun);
@@ -217,7 +217,6 @@ class MurirTinApp {
       this.clearActiveInputs();
       const s = this.store.get();
       (document.getElementById('toggle-sfx') as HTMLInputElement).checked = s.soundEnabled;
-      (document.getElementById('toggle-voice') as HTMLInputElement).checked = s.voiceCalloutsEnabled;
       this.settingsDialog.showModal();
     });
 
@@ -304,7 +303,7 @@ class MurirTinApp {
       this.createSimulationFromSave();
       this.isPlaying = true;
       this.audio.playHydraulicHorn();
-      this.showCallout('নতুন ট্রিপ শুরু! বামে চাপান ওস্তাদ!', false);
+      this.showCallout('নতুন ট্রিপ শুরু! বামে চাপান ওস্তাদ!');
     });
 
     this.reviveBtn.addEventListener('click', () => {
@@ -313,7 +312,7 @@ class MurirTinApp {
       this.clearActiveInputs();
       this.isPlaying = true;
       this.audio.playHelperDoorSlap();
-      this.showCallout('ধোলাইখাল মিস্ত্রি ঠিক করে দিছে! আবার চালান!', false);
+      this.showCallout('ধোলাইখাল মিস্ত্রি ঠিক করে দিছে! আবার চালান!');
     });
 
     document.getElementById('leaderboard-submit-form')!.addEventListener('submit', (e) => {
@@ -346,15 +345,7 @@ class MurirTinApp {
       this.store.update((d) => {
         d.soundEnabled = val;
       });
-      this.audio.setPreferences(val, this.store.get().voiceCalloutsEnabled);
-    });
-
-    document.getElementById('toggle-voice')!.addEventListener('change', (e) => {
-      const val = (e.target as HTMLInputElement).checked;
-      this.store.update((d) => {
-        d.voiceCalloutsEnabled = val;
-      });
-      this.audio.setPreferences(this.store.get().soundEnabled, val);
+      this.audio.setPreferences(val);
     });
 
     document.getElementById('btn-reset-save')!.addEventListener('click', () => {
@@ -373,7 +364,7 @@ class MurirTinApp {
     this.audio.playHydraulicHorn();
     const events = this.sim.blastHorn();
     for (const ev of events) {
-      this.showCallout(ev.callout, false);
+      this.showCallout(ev.callout);
       this.spawnFloatPop('+৳35 সাইড!', 'pop-green');
     }
   }
@@ -440,14 +431,7 @@ class MurirTinApp {
   }
 
   private handleSimEvent(ev: ReturnType<RoadSimulation['step']>[number]): void {
-    const speak =
-      ev.type === 'chapani' ||
-      ev.type === 'toll_approaching' ||
-      ev.type === 'toll_paid' ||
-      ev.type === 'toll_smash' ||
-      ev.type === 'bridge_complete' ||
-      ev.type === 'gameover';
-    this.showCallout(ev.callout, speak);
+    this.showCallout(ev.callout);
 
     if (ev.type === 'chapani' || ev.type === 'tesla_dodge' || ev.type === 'pit_smash') {
       this.audio.playChapaniSparks(this.sim.chapaniCombo);
@@ -649,12 +633,9 @@ class MurirTinApp {
     }
   }
 
-  private showCallout(text: string, speak: boolean): void {
+  private showCallout(text: string): void {
     this.helperCalloutText.textContent = text;
     this.helperCallout.classList.remove('hidden');
-    if (speak) {
-      this.audio.speakHelperLine(text);
-    }
     window.clearTimeout(this.calloutTimeout);
     this.calloutTimeout = window.setTimeout(() => {
       this.helperCallout.classList.add('hidden');
