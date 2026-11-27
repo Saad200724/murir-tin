@@ -248,19 +248,48 @@
         </div>
       </dialog>
 
-      <!-- 1. Dholaikhal Garage & Skins Dialog -->
+      <!-- 1. Dholaikhal 3D Bus Showroom & Upgrades Dialog -->
       <dialog id="garage-dialog" closedby="any" aria-labelledby="garage-title">
         <div class="dialog-header">
-          <h1 id="garage-title"><span aria-hidden="true">🔧</span> ধোলাইখাল গ্যারেজ</h1>
-          <form method="dialog">
-            <button type="submit" class="close-btn" value="close" aria-label="গ্যারেজ বন্ধ করুন" autofocus>✕</button>
-          </form>
+          <h1 id="garage-title"><span aria-hidden="true">🚌</span> ধোলাইখাল ৩ডি বাস শোরুম</h1>
+          <div class="garage-header-right">
+            <span class="garage-balance">ক্যাশ: <strong id="garage-taka">৳ 250</strong></span>
+            <form method="dialog">
+              <button type="submit" class="close-btn" value="close" aria-label="গ্যারেজ বন্ধ করুন" autofocus>✕</button>
+            </form>
+          </div>
         </div>
-        <p class="garage-balance">আপনার ক্যাশ: <strong id="garage-taka">৳ 250</strong></p>
-        <h2 class="section-sub">বাস আপগ্রেড</h2>
-        <div id="upgrade-list" class="garage-grid"></div>
-        <h2 class="section-sub">লোকাল বাস স্কিন</h2>
-        <div id="skin-list" class="garage-grid" role="region" aria-label="Bus skins" tabindex="0"></div>
+
+        <div class="pause-tablist" role="tablist" aria-label="গ্যারেজ ট্যাব">
+          <button type="button" role="tab" id="gtab-showroom" aria-selected="true">🚌 ৩ডি বাস শোরুম</button>
+          <button type="button" role="tab" id="gtab-upgrades" aria-selected="false">⚙️ ইঞ্জিন ও পার্টস</button>
+        </div>
+
+        <div id="gpanel-showroom" role="tabpanel" aria-labelledby="gtab-showroom" class="showroom-panel">
+          <div class="showroom-stage-wrap">
+            <div id="showroom-stage" class="showroom-stage" aria-label="360 degree 3D bus preview"></div>
+            <button id="btn-bus-prev" type="button" class="showroom-nav prev" aria-label="আগের বাস">◀</button>
+            <button id="btn-bus-next" type="button" class="showroom-nav next" aria-label="পরের বাস">▶</button>
+            <span class="showroom-drag-hint">↻ ৩৬০° ঘুরিয়ে দেখুন</span>
+          </div>
+
+          <div class="showroom-meta">
+            <div class="showroom-title-row">
+              <div>
+                <h2 id="showroom-bus-name">মুড়ির টিন ক্লাসিক</h2>
+                <span id="showroom-bus-route" class="showroom-route"></span>
+              </div>
+              <button id="btn-bus-action" type="button" class="btn-primary">সিলেক্টেড ✓</button>
+            </div>
+            <p id="showroom-bus-tagline" class="showroom-tagline"></p>
+            <div id="showroom-stats" class="showroom-stats"></div>
+            <div id="showroom-dots" class="showroom-dots"></div>
+          </div>
+        </div>
+
+        <div id="gpanel-upgrades" role="tabpanel" aria-labelledby="gtab-upgrades" class="upgrades-panel" hidden>
+          <div id="upgrade-list" class="garage-grid"></div>
+        </div>
       </dialog>
 
       <!-- 2. Game Over Viral Meme Scorecard + Live Leaderboard Submit Dialog -->

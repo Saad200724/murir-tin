@@ -5,6 +5,7 @@ import { type BridgeStyle } from '../core/BangladeshRoute';
 import { BUS_SKINS } from '../core/GarageCatalog';
 import { type RoadEntity, type RoadSimulation } from '../core/RoadSimulation';
 import { type CameraMode, type GraphicsPreset } from '../core/SaveStore';
+import { attachRajdhaniLivery, disposeLivery } from './BusLiveryBuilder';
 
 interface BurstParticle {
   mesh: THREE.Mesh;
@@ -83,6 +84,7 @@ export class DhakaWorld3D {
 
   private cameraShake = 0;
   private currentSkinId = 'classic_mirpur';
+  private currentPreset: GraphicsPreset = 'high';
   private renderedRiderCount = 0;
   private cameraMode: CameraMode = 'chase';
   private activeRainLimit = 90;
@@ -159,7 +161,9 @@ export class DhakaWorld3D {
   }
 
   public applyGraphicsPreset(preset: GraphicsPreset): void {
+    this.currentPreset = preset;
     const dpr = window.devicePixelRatio || 1;
+    let shadowRes = 1024;
     if (preset === 'low') {
       this.renderer.setPixelRatio(0.75);
       this.renderer.shadowMap.enabled = false;
@@ -167,15 +171,26 @@ export class DhakaWorld3D {
     } else if (preset === 'medium') {
       this.renderer.setPixelRatio(1);
       this.renderer.shadowMap.enabled = true;
+      shadowRes = 512;
       this.activeRainLimit = 60;
     } else if (preset === 'high') {
       this.renderer.setPixelRatio(Math.min(dpr, 1.5));
       this.renderer.shadowMap.enabled = true;
+      shadowRes = 1024;
       this.activeRainLimit = 100;
     } else {
       this.renderer.setPixelRatio(Math.min(dpr, 2));
       this.renderer.shadowMap.enabled = true;
+      shadowRes = 2048;
       this.activeRainLimit = 140;
+    }
+    if (this.sunLight.shadow.mapSize.width !== shadowRes) {
+      this.sunLight.shadow.mapSize.set(shadowRes, shadowRes);
+      this.sunLight.shadow.map?.dispose();
+      this.sunLight.shadow.map = null;
+    }
+    if (this.templates.has('murir_tin_bus')) {
+      this.rebuildPlayerBus(this.currentSkinId);
     }
     this.resize();
   }
@@ -187,6 +202,7 @@ export class DhakaWorld3D {
   public async preloadModels(): Promise<void> {
     const names = [
       'murir_tin_bus',
+      'rajdhani_bus',
       'plastic_sedan',
       'deshi_tesla_auto',
       'cng_rickshaw',
@@ -232,26 +248,49 @@ export class DhakaWorld3D {
     }
   }
 
+  public buildBusPreviewClone(skinId: string): THREE.Group {
+    const skin = BUS_SKINS.find((s) => s.id === skinId) ?? BUS_SKINS[0];
+    const tpl =
+      this.templates.get(skin.modelName) ??
+      this.templates.get('murir_tin_bus') ??
+      this.createFallbackBox(skin.modelName);
+    const bus = tpl.clone(true);
+
+    if (skin.modelName === 'rajdhani_bus') {
+      // Preserve multi-material crimson/white/blue/green/amber paint & attach adaptive crisp Bengali livery!
+      bus.traverse((obj) => {
+        if ((obj as THREE.Mesh).isMesh) {
+          const mesh = obj as THREE.Mesh;
+          const m = (mesh.material as THREE.MeshStandardMaterial).clone();
+          if (this.currentPreset === 'ultra') {
+            m.roughness = Math.max(0.12, m.roughness * 0.85);
+          }
+          mesh.material = m;
+        }
+      });
+      attachRajdhaniLivery(bus, this.currentPreset, this.renderer.capabilities.getMaxAnisotropy());
+    } else {
+      let matIdx = 0;
+      bus.traverse((obj) => {
+        if ((obj as THREE.Mesh).isMesh) {
+          const mesh = obj as THREE.Mesh;
+          const m = (mesh.material as THREE.MeshStandardMaterial).clone();
+          if (matIdx === 0) m.color.set(skin.bodyHex);
+          if (matIdx === 1) m.color.set(skin.stripeHex);
+          mesh.material = m;
+          matIdx++;
+        }
+      });
+    }
+    return bus;
+  }
+
   private rebuildPlayerBus(skinId: string): void {
     if (this.playerBusBody) {
+      disposeLivery(this.playerBusBody);
       this.playerGroup.remove(this.playerBusBody);
     }
-    const tpl = this.templates.get('murir_tin_bus') ?? this.createFallbackBox('murir_tin_bus');
-    const bus = tpl.clone(true);
-    const skin = BUS_SKINS.find((s) => s.id === skinId) ?? BUS_SKINS[0];
-
-    let matIdx = 0;
-    bus.traverse((obj) => {
-      if ((obj as THREE.Mesh).isMesh) {
-        const mesh = obj as THREE.Mesh;
-        const m = (mesh.material as THREE.MeshStandardMaterial).clone();
-        if (matIdx === 0) m.color.set(skin.bodyHex);
-        if (matIdx === 1) m.color.set(skin.stripeHex);
-        mesh.material = m;
-        matIdx++;
-      }
-    });
-
+    const bus = this.buildBusPreviewClone(skinId);
     this.playerBusBody = bus;
     this.playerGroup.add(bus);
 

@@ -449,10 +449,120 @@ function makePassengerNpc() {
   ];
 }
 
+// 8. Rajdhani Super Service Ltd. (High-craft iconic Bangladeshi local/highway express bus, facing -Z)
+function makeRajdhaniBus() {
+  const crimsonBody = createRawMesh();
+  // Main lower + mid fuselage
+  appendTransformed(crimsonBody, makeBox(2.30, 1.98, 5.76), 0, 1.38, 0);
+  // Sloped upper front header brow
+  appendTransformed(crimsonBody, makeBox(2.22, 0.42, 0.36), 0, 2.20, -2.76, -0.18, 0, 0);
+  // Side wheel-well flares
+  for (const sx of [-1.14, 1.14]) {
+    appendTransformed(crimsonBody, makeBox(0.10, 0.24, 1.12), sx, 0.72, -1.75);
+    appendTransformed(crimsonBody, makeBox(0.10, 0.24, 1.12), sx, 0.72, 1.65);
+  }
+
+  const whiteRoof = createRawMesh();
+  // Sculpted white roof cap + rear spoiler lip
+  appendTransformed(whiteRoof, makeBox(2.14, 0.20, 5.52), 0, 2.46, 0.04);
+  appendTransformed(whiteRoof, makeBox(1.94, 0.14, 0.55), 0, 2.52, -2.52, 0.14, 0, 0);
+  appendTransformed(whiteRoof, makeBox(1.98, 0.12, 0.42), 0, 2.54, 2.68);
+
+  const silverChrome = createRawMesh();
+  // Metallic front & rear bumpers + side skirts
+  appendTransformed(silverChrome, makeBox(2.34, 0.28, 0.22), 0, 0.50, -2.86);
+  appendTransformed(silverChrome, makeBox(2.34, 0.28, 0.20), 0, 0.50, 2.86);
+  // Silver aluminum window pillars (7 mullions per side) + horizontal sash bar
+  for (const sx of [-1.155, 1.155]) {
+    appendTransformed(silverChrome, makeBox(0.04, 0.06, 5.10), sx, 1.48, 0.12);
+    appendTransformed(silverChrome, makeBox(0.04, 0.05, 5.10), sx, 2.16, 0.12);
+    for (let w = 0; w < 8; w++) {
+      appendTransformed(silverChrome, makeBox(0.05, 0.72, 0.07), sx, 1.82, -2.40 + w * 0.72);
+    }
+  }
+  // Hino-style chrome wing badge, grille bars & H emblem
+  appendTransformed(silverChrome, makeBox(0.92, 0.08, 0.06), 0, 1.28, -2.90);
+  appendTransformed(silverChrome, makeCylinder(0.16, 0.16, 0.06, 14), 0, 1.08, -2.90, Math.PI / 2, 0, 0);
+  appendTransformed(silverChrome, makeBox(0.84, 0.06, 0.05), 0, 0.80, -2.90);
+  // Left passenger door chrome grab pole & step
+  appendTransformed(silverChrome, makeCylinder(0.025, 0.025, 1.55, 8), -1.16, 1.15, -1.05);
+  appendTransformed(silverChrome, makeBox(0.24, 0.08, 0.78), -1.12, 0.42, -1.05);
+  // Twin chrome rear exhaust pipes
+  appendTransformed(silverChrome, makeCylinder(0.055, 0.055, 0.42, 10), -0.68, 0.36, 2.94, Math.PI / 2, 0, 0);
+  appendTransformed(silverChrome, makeCylinder(0.055, 0.055, 0.42, 10), -0.50, 0.36, 2.94, Math.PI / 2, 0, 0);
+
+  const glassAndDark = createRawMesh();
+  // Panoramic front windshield, side windows, rear glass + dark front grille + wipers
+  appendTransformed(glassAndDark, makeBox(2.08, 0.88, 0.10), 0, 1.76, -2.84, -0.06, 0, 0);
+  appendTransformed(glassAndDark, makeBox(2.32, 0.64, 5.02), 0, 1.82, 0.12);
+  appendTransformed(glassAndDark, makeBox(2.02, 0.66, 0.10), 0, 1.82, 2.86);
+  // Left passenger open doorway recess
+  appendTransformed(glassAndDark, makeBox(0.14, 1.62, 0.72), -1.11, 1.22, -1.05);
+  // Front dark radiator grille & lower intake
+  appendTransformed(glassAndDark, makeBox(0.86, 0.32, 0.08), 0, 1.06, -2.88);
+  appendTransformed(glassAndDark, makeBox(0.76, 0.22, 0.08), 0, 0.68, -2.88);
+  // Twin windshield wipers
+  appendTransformed(glassAndDark, makeBox(0.035, 0.58, 0.04), -0.34, 1.62, -2.90, 0, 0, -0.34);
+  appendTransformed(glassAndDark, makeBox(0.035, 0.58, 0.04), 0.26, 1.62, -2.90, 0, 0, -0.34);
+
+  const royalBlueAccent = createRawMesh();
+  // Royal blue recessed headlight housings & roof rainbow stripe
+  appendTransformed(royalBlueAccent, makeBox(0.56, 0.22, 0.10), -0.82, 0.92, -2.87, 0, 0, -0.10);
+  appendTransformed(royalBlueAccent, makeBox(0.56, 0.22, 0.10), 0.82, 0.92, -2.87, 0, 0, 0.10);
+  appendTransformed(royalBlueAccent, makeBox(2.20, 0.10, 4.80), 0, 2.38, 0.10);
+
+  const mirrorGreen = createRawMesh();
+  // Iconic Rajdhani green curved upper mirror stalks + front green smile stripe
+  appendTransformed(mirrorGreen, makeBox(0.28, 0.10, 0.10), -1.28, 2.22, -2.86, 0, 0, 0.25);
+  appendTransformed(mirrorGreen, makeBox(0.28, 0.10, 0.10), 1.28, 2.22, -2.86, 0, 0, -0.25);
+  appendTransformed(mirrorGreen, makeBox(0.94, 0.06, 0.06), 0, 0.86, -2.89);
+
+  const mirrorAmber = createRawMesh();
+  // Iconic twin orange-yellow antler mirror pods + yellow lower fog bezels
+  appendTransformed(mirrorAmber, makeCylinder(0.11, 0.10, 0.44, 12), -1.42, 1.96, -2.96);
+  appendTransformed(mirrorAmber, makeCylinder(0.11, 0.10, 0.44, 12), 1.42, 1.96, -2.96);
+  appendTransformed(mirrorAmber, makeBox(0.46, 0.16, 0.10), -0.82, 0.56, -2.88);
+  appendTransformed(mirrorAmber, makeBox(0.46, 0.16, 0.10), 0.82, 0.56, -2.88);
+
+  const brightLights = createRawMesh();
+  // Front LED headlights
+  appendTransformed(brightLights, makeBox(0.18, 0.12, 0.06), -0.74, 0.92, -2.91);
+  appendTransformed(brightLights, makeBox(0.18, 0.12, 0.06), -0.94, 0.94, -2.91);
+  appendTransformed(brightLights, makeBox(0.18, 0.12, 0.06), 0.74, 0.92, -2.91);
+  appendTransformed(brightLights, makeBox(0.18, 0.12, 0.06), 0.94, 0.94, -2.91);
+  // Front fog lamps
+  appendTransformed(brightLights, makeBox(0.22, 0.10, 0.06), -0.82, 0.56, -2.92);
+  appendTransformed(brightLights, makeBox(0.22, 0.10, 0.06), 0.82, 0.56, -2.92);
+
+  const tailLights = createRawMesh();
+  appendTransformed(tailLights, makeBox(0.38, 0.16, 0.08), -0.82, 0.88, 2.89);
+  appendTransformed(tailLights, makeBox(0.38, 0.16, 0.08), 0.82, 0.88, 2.89);
+
+  const wheels = createRawMesh();
+  const hubs = createRawMesh();
+  addWheelPair(wheels, hubs, 1.07, 0.46, -1.75, 0.46, 0.30);
+  addWheelPair(wheels, hubs, 1.07, 0.46, 1.65, 0.46, 0.32);
+
+  return [
+    { mesh: crimsonBody, color: rgb('#b81d38'), roughness: 0.34, metallic: 0.14 },
+    { mesh: whiteRoof, color: rgb('#f8f9fa'), roughness: 0.42 },
+    { mesh: silverChrome, color: rgb('#d8dee9'), roughness: 0.24, metallic: 0.72 },
+    { mesh: glassAndDark, color: rgb('#182534'), roughness: 0.10, metallic: 0.30 },
+    { mesh: royalBlueAccent, color: rgb('#1d4ed8'), roughness: 0.35 },
+    { mesh: mirrorGreen, color: rgb('#16a34a'), roughness: 0.36 },
+    { mesh: mirrorAmber, color: rgb('#f59e0b'), roughness: 0.34 },
+    { mesh: brightLights, color: rgb('#e0f2fe'), emissive: [0.85, 0.92, 1.0] },
+    { mesh: tailLights, color: rgb('#ff1e42'), emissive: [0.95, 0.12, 0.22] },
+    { mesh: wheels, color: rgb('#181a20'), roughness: 0.86 },
+    { mesh: hubs, color: rgb('#cbd5e1'), roughness: 0.26, metallic: 0.76 },
+  ];
+}
+
 function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
   const models = {
     murir_tin_bus: makeMurirTinBus(),
+    rajdhani_bus: makeRajdhaniBus(),
     plastic_sedan: makePlasticSedan(),
     deshi_tesla_auto: makeDeshiTeslaAuto(),
     cng_rickshaw: makeCngRickshaw(),

@@ -183,7 +183,9 @@ export class RoadSimulation {
   constructor(
     private readonly engineLevel = 1,
     private readonly armorLevel = 1,
-    private readonly nitroLevel = 1
+    private readonly nitroLevel = 1,
+    private readonly busBonusSpeed = 0,
+    private readonly busBonusArmor = 0
   ) {
     this.reset(0);
   }
@@ -195,7 +197,7 @@ export class RoadSimulation {
   public reset(startDistanceM = 0): void {
     this.playerX = -1.5;
     this.playerVx = 0;
-    this.speed = 24 + (this.engineLevel - 1) * 2.2;
+    this.speed = 24 + (this.engineLevel - 1) * 2.2 + this.busBonusSpeed;
     this.tiltAngle = 0;
     this.distanceM = Math.max(0, startDistanceM);
     this.score = 0;
@@ -208,7 +210,7 @@ export class RoadSimulation {
     this.feverActive = false;
     this.nitroCharge = 60;
     this.nitroActive = false;
-    this.maxHealth = 2 + this.armorLevel;
+    this.maxHealth = 2 + this.armorLevel + this.busBonusArmor;
     this.health = this.maxHealth;
     this.invulnTimer = 0;
     this.crashed = false;
@@ -420,6 +422,7 @@ export class RoadSimulation {
     const baseCruise =
       25 +
       (this.engineLevel - 1) * 2.5 +
+      this.busBonusSpeed +
       progressBonus +
       (this.isOnBridge || this.currentBiome === 'flyover' ? 2.8 : 0);
     let targetSpeed = baseCruise;

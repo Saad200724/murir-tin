@@ -22,6 +22,7 @@ describe('Murir Tin 3D — Explore Bangladesh, Bridges, Slopes & Mechanics', () 
     const modelsDir = path.resolve(__dirname, '../public/models');
     const expected = [
       'murir_tin_bus.glb',
+      'rajdhani_bus.glb',
       'plastic_sedan.glb',
       'deshi_tesla_auto.glb',
       'cng_rickshaw.glb',
@@ -34,6 +35,7 @@ describe('Murir Tin 3D — Explore Bangladesh, Bridges, Slopes & Mechanics', () 
       expect(fs.existsSync(p)).toBe(true);
       const buf = fs.readFileSync(p);
       expect(buf.length).toBeGreaterThan(200);
+      expect(buf.length).toBeLessThan(80 * 1024);
       expect(buf.toString('ascii', 0, 4)).toBe('glTF');
       expect(buf.readUInt32LE(4)).toBe(2);
     }
@@ -204,5 +206,11 @@ describe('Murir Tin 3D — Explore Bangladesh, Bridges, Slopes & Mechanics', () 
     expect(reloaded.get().unlockedHubs).toContain('dhaka');
     expect(reloaded.get().unlockedSkins).toContain(BUS_SKINS[1].id);
     expect(getUpgradeCost(UPGRADES[0], 1)).toBe(300);
+
+    const rajdhani = BUS_SKINS.find((b) => b.id === 'rajdhani_express');
+    expect(rajdhani?.modelName).toBe('rajdhani_bus');
+    const simRaj = new RoadSimulation(1, 1, 1, rajdhani!.bonusSpeed, rajdhani!.bonusArmor);
+    expect(simRaj.maxHealth).toBe(4);
+    expect(simRaj.speed).toBeGreaterThan(25);
   });
 });

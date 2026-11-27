@@ -22,6 +22,7 @@ import {
 import { DhakaWorld3D } from './scene/DhakaWorld3D';
 import { BangladeshMapView } from './ui/BangladeshMapView';
 import { wireNativeDialogs } from './ui/DialogHelpers';
+import { GarageShowroom3D } from './ui/GarageShowroom3D';
 import { renderMiniMap } from './ui/MiniMapCanvas';
 import { renderMemeScorecard } from './ui/ScorecardCanvas';
 
@@ -51,6 +52,8 @@ class MurirTinApp {
   private world!: DhakaWorld3D;
   private sim!: RoadSimulation;
   private bdMap!: BangladeshMapView;
+  private showroom!: GarageShowroom3D;
+  private showroomIndex = 0;
 
   private isPlaying = false;
   private isPaused = false;
@@ -123,6 +126,7 @@ class MurirTinApp {
     this.parseChallengeParams();
 
     this.world = new DhakaWorld3D(this.stageEl);
+    this.showroom = new GarageShowroom3D(document.getElementById('showroom-stage')!);
     this.applySavedVisualAudioSettings();
 
     this.bdMap = new BangladeshMapView(document.getElementById('bd-map-mount')!, (seg) => {
@@ -134,6 +138,7 @@ class MurirTinApp {
     this.createSimulationFromSave(0);
     this.populateHubSelector();
     this.bindPauseTabs();
+    this.bindGarageControls();
     this.bindControls();
     this.setupLifecycleAndBackHandler();
     this.syncNameInputs();
@@ -191,7 +196,14 @@ class MurirTinApp {
 
   private createSimulationFromSave(startM = 0): void {
     const s = this.store.get();
-    this.sim = new RoadSimulation(s.engineLevel, s.armorLevel, s.nitroLevel);
+    const skin = BUS_SKINS.find((b) => b.id === s.selectedSkin) ?? BUS_SKINS[0];
+    this.sim = new RoadSimulation(
+      s.engineLevel,
+      s.armorLevel,
+      s.nitroLevel,
+      skin.bonusSpeed,
+      skin.bonusArmor
+    );
     this.sim.reset(startM);
     this.bankedTakaInRun = 0;
     this.scoreSubmittedForRun = false;
@@ -433,8 +445,12 @@ class MurirTinApp {
     const openGarage = () => {
       this.modalPaused = true;
       this.clearActiveInputs();
+      const selIdx = BUS_SKINS.findIndex((b) => b.id === this.store.get().selectedSkin);
+      this.showroomIndex = selIdx >= 0 ? selIdx : 0;
+      this.selectGarageTab('gtab-showroom');
       this.renderGarage();
       this.garageDialog.showModal();
+      this.showroom.start();
     };
     document.getElementById('btn-open-garage-title')!.addEventListener('click', openGarage);
     document.getElementById('btn-garage')!.addEventListener('click', openGarage);
@@ -483,7 +499,10 @@ class MurirTinApp {
       this.lastTime = performance.now();
     };
     this.pauseDialog.addEventListener('close', onModalClose);
-    this.garageDialog.addEventListener('close', onModalClose);
+    this.garageDialog.addEventListener('close', () => {
+      this.showroom.stop();
+      onModalClose();
+    });
     this.leaderboardDialog.addEventListener('close', onModalClose);
 
     // Keyboard controls + ESC Pause + M Map + Keymap Rebind
@@ -1023,9 +1042,128 @@ class MurirTinApp {
     }, 2400);
   }
 
+  private selectGarageTab(tabId: 'gtab-showroom' | 'gtab-upgrades'): void {
+    const tabs = Array.from(this.garageDialog.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+    const panels = Array.from(this.garageDialog.querySelectorAll<HTMLElement>('[role="tabpanel"]'));
+    for (const tab of tabs) {
+      tab.setAttribute('aria-selected', String(tab.id === tabId));
+    }
+    for (const panel of panels) {
+      panel.hidden = panel.getAttribute('aria-labelledby') !== tabId;
+    }
+    if (tabId === 'gtab-showroom') {
+      this.showroom.resize();
+    }
+  }
+
+  private bindGarageControls(): void {
+    document.getElementById('gtab-showroom')!.addEventListener('click', () => {
+      this.selectGarageTab('gtab-showroom');
+    });
+    document.getElementById('gtab-upgrades')!.addEventListener('click', () => {
+      this.selectGarageTab('gtab-upgrades');
+    });
+
+    document.getElementById('btn-bus-prev')!.addEventListener('click', () => {
+      this.showroomIndex = (this.showroomIndex - 1 + BUS_SKINS.length) % BUS_SKINS.length;
+      this.renderShowroomBus();
+    });
+    document.getElementById('btn-bus-next')!.addEventListener('click', () => {
+      this.showroomIndex = (this.showroomIndex + 1) % BUS_SKINS.length;
+      this.renderShowroomBus();
+    });
+
+    document.getElementById('btn-bus-action')!.addEventListener('click', () => {
+      const skin = BUS_SKINS[this.showroomIndex];
+      const save = this.store.get();
+      const owned = save.unlockedSkins.includes(skin.id);
+      if (save.selectedSkin === skin.id) return;
+
+      if (owned) {
+        this.audio.playHelperDoorSlap();
+        this.store.update((d) => {
+          d.selectedSkin = skin.id;
+        });
+      } else {
+        if (save.taka < skin.cost) return;
+        this.audio.playHydraulicHorn();
+        this.store.update((d) => {
+          d.taka -= skin.cost;
+          d.unlockedSkins.push(skin.id);
+          d.selectedSkin = skin.id;
+        });
+      }
+      this.world.setBusSkin(skin.id);
+      this.refreshTitleStats();
+      this.refreshHud();
+      this.renderGarage();
+    });
+  }
+
+  private renderShowroomBus(): void {
+    const save = this.store.get();
+    const skin = BUS_SKINS[this.showroomIndex] ?? BUS_SKINS[0];
+    const owned = save.unlockedSkins.includes(skin.id);
+    const selected = save.selectedSkin === skin.id;
+
+    document.getElementById('showroom-bus-name')!.textContent = skin.name;
+    document.getElementById('showroom-bus-route')!.textContent = skin.routeBadge;
+    document.getElementById('showroom-bus-tagline')!.textContent = skin.tagline;
+
+    const statEntries: [string, number][] = [
+      ['⚡ টপ স্পিড', skin.stats.speed],
+      ['🛡️ বাম্পার হেলথ', skin.stats.armor],
+      ['🔥 নাইট্রো পাওয়ার', skin.stats.nitro],
+      ['👥 যাত্রী ক্ষমতা', skin.stats.capacity],
+    ];
+    const statsMount = document.getElementById('showroom-stats')!;
+    statsMount.innerHTML = statEntries
+      .map(
+        ([label, val]) => `
+        <div class="stat-bar-row">
+          <span>${label} (${val}%)</span>
+          <div class="stat-bar-track"><span class="stat-bar-fill" style="width:${val}%"></span></div>
+        </div>
+      `
+      )
+      .join('');
+
+    const actionBtn = document.getElementById('btn-bus-action') as HTMLButtonElement;
+    if (selected) {
+      actionBtn.className = 'btn-secondary';
+      actionBtn.textContent = 'সিলেক্টেড ✓';
+      actionBtn.disabled = true;
+    } else if (owned) {
+      actionBtn.className = 'btn-outline';
+      actionBtn.textContent = 'সিলেক্ট করুন';
+      actionBtn.disabled = false;
+    } else {
+      actionBtn.className = 'btn-primary';
+      actionBtn.textContent = `কিনুন ৳ ${skin.cost}`;
+      actionBtn.disabled = save.taka < skin.cost;
+    }
+
+    const dotsMount = document.getElementById('showroom-dots')!;
+    dotsMount.innerHTML = '';
+    BUS_SKINS.forEach((b, idx) => {
+      const dot = document.createElement('button');
+      dot.type = 'button';
+      dot.className = `showroom-dot ${idx === this.showroomIndex ? 'active' : ''}`;
+      dot.setAttribute('aria-label', b.name);
+      dot.addEventListener('click', () => {
+        this.showroomIndex = idx;
+        this.renderShowroomBus();
+      });
+      dotsMount.appendChild(dot);
+    });
+
+    this.showroom.showBus(this.world.buildBusPreviewClone(skin.id));
+  }
+
   private renderGarage(): void {
     const save = this.store.get();
     document.getElementById('garage-taka')!.textContent = `৳ ${save.taka}`;
+    this.renderShowroomBus();
 
     const upGrid = document.getElementById('upgrade-list')!;
     upGrid.innerHTML = '';
@@ -1061,56 +1199,6 @@ class MurirTinApp {
       });
       card.appendChild(btn);
       upGrid.appendChild(card);
-    }
-
-    const skinGrid = document.getElementById('skin-list')!;
-    skinGrid.innerHTML = '';
-    for (const skin of BUS_SKINS) {
-      const owned = save.unlockedSkins.includes(skin.id);
-      const selected = save.selectedSkin === skin.id;
-
-      const card = document.createElement('div');
-      card.className = 'garage-card';
-      card.innerHTML = `
-        <div style="height:18px;border-radius:8px;background:linear-gradient(90deg,${skin.bodyHex},${skin.stripeHex})"></div>
-        <strong>${skin.name}</strong>
-        <p>${skin.routeBadge}</p>
-      `;
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      if (selected) {
-        btn.className = 'btn-secondary';
-        btn.textContent = 'সিলেক্টেড ✓';
-        btn.disabled = true;
-      } else if (owned) {
-        btn.className = 'btn-outline';
-        btn.textContent = 'সিলেক্ট করুন';
-        btn.addEventListener('click', () => {
-          this.store.update((d) => {
-            d.selectedSkin = skin.id;
-          });
-          this.world.setBusSkin(skin.id);
-          this.renderGarage();
-        });
-      } else {
-        btn.className = 'btn-primary';
-        btn.textContent = `কিনুন ৳ ${skin.cost}`;
-        btn.disabled = save.taka < skin.cost;
-        btn.addEventListener('click', () => {
-          if (this.store.get().taka < skin.cost) return;
-          this.audio.playHydraulicHorn();
-          this.store.update((d) => {
-            d.taka -= skin.cost;
-            d.unlockedSkins.push(skin.id);
-            d.selectedSkin = skin.id;
-          });
-          this.world.setBusSkin(skin.id);
-          this.refreshTitleStats();
-          this.renderGarage();
-        });
-      }
-      card.appendChild(btn);
-      skinGrid.appendChild(card);
     }
   }
 
