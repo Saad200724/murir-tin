@@ -799,9 +799,11 @@ dialog::backdrop {
   border-radius: 14px;
   overflow: hidden;
   border: 2px solid rgb(255 255 255 / 0.2);
-  background: #0d1b2a;
-  aspect-ratio: 1 / 1;
-  max-height: 360px;
+  background: #0b1d33;
+  aspect-ratio: 738 / 1024;
+  max-height: 460px;
+  margin-inline: auto;
+  width: 100%;
 }
 
 .bd-map-svg {

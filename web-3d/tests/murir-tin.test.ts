@@ -38,6 +38,7 @@ describe('Murir Tin 3D — Explore Bangladesh, Bridges, Slopes & Mechanics', () 
       expect(buf.readUInt32LE(4)).toBe(2);
     }
     expect(fs.existsSync(path.resolve(__dirname, '../public/og-banner.jpg'))).toBe(true);
+    expect(fs.existsSync(path.resolve(__dirname, '../public/bd-map.png'))).toBe(true);
   });
 
   it('covers contiguous 84,000m Thakurgaon->Coxs Bazar route with 5 bridges and elevation slopes', () => {

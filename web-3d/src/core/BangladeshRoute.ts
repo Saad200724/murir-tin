@@ -20,8 +20,10 @@ export interface RouteSegment {
   tollFee?: number;
   hasParallelRail?: boolean;
   isHub?: boolean;
-  mapX: number; // 0..1000 SVG viewBox X
-  mapY: number; // 0..1000 SVG viewBox Y
+  mapX: number; // 0..738 SVG viewBox X on bd-map.png
+  mapY: number; // 0..1024 SVG viewBox Y on bd-map.png
+  labelAnchor?: 'left' | 'right';
+  labelDy?: number;
   tagline: string;
 }
 
@@ -39,8 +41,9 @@ export const BD_ROUTE_SEGMENTS: readonly RouteSegment[] = [
     biome: 'north_bengal',
     hasParallelRail: true,
     isHub: true,
-    mapX: 162,
-    mapY: 112,
+    mapX: 72,
+    mapY: 108,
+    labelAnchor: 'right',
     tagline: 'ভোরের কুয়াশা আর সবুজ ধানক্ষেত থেকে যাত্রা শুরু!',
   },
   {
@@ -50,8 +53,8 @@ export const BD_ROUTE_SEGMENTS: readonly RouteSegment[] = [
     startM: 3800,
     endM: 5200,
     biome: 'flyover',
-    mapX: 215,
-    mapY: 162,
+    mapX: 142,
+    mapY: 165,
     tagline: 'ফ্লাইওভারের ঢাল বেয়ে স্পিড তোলেন ওস্তাদ!',
   },
   {
@@ -62,8 +65,9 @@ export const BD_ROUTE_SEGMENTS: readonly RouteSegment[] = [
     endM: 11500,
     biome: 'north_bengal',
     isHub: true,
-    mapX: 295,
-    mapY: 184,
+    mapX: 210,
+    mapY: 168,
+    labelAnchor: 'right',
     tagline: 'তাজহাট ও রংপুর হাইওয়ে — সরিষা খেতের পাশ দিয়ে!',
   },
   {
@@ -75,8 +79,9 @@ export const BD_ROUTE_SEGMENTS: readonly RouteSegment[] = [
     biome: 'north_bengal',
     hasParallelRail: true,
     isHub: true,
-    mapX: 326,
-    mapY: 286,
+    mapX: 236,
+    mapY: 305,
+    labelAnchor: 'left',
     tagline: 'বগুড়ার দই আর উত্তরাঞ্চলের হাই-স্পিড রুট!',
   },
   {
@@ -86,8 +91,8 @@ export const BD_ROUTE_SEGMENTS: readonly RouteSegment[] = [
     startM: 17500,
     endM: 19000,
     biome: 'flyover',
-    mapX: 342,
-    mapY: 325,
+    mapX: 246,
+    mapY: 338,
     tagline: 'বাইপাস ফ্লাইওভার — জ্যাম ছাড়াই উড়াল!',
   },
   {
@@ -98,8 +103,8 @@ export const BD_ROUTE_SEGMENTS: readonly RouteSegment[] = [
     endM: 24500,
     biome: 'north_bengal',
     hasParallelRail: true,
-    mapX: 368,
-    mapY: 365,
+    mapX: 262,
+    mapY: 392,
     tagline: 'যমুনা নদীর পাড়ে পৌঁছে গেছি — সামনেই মহাসেতু!',
   },
   {
@@ -113,8 +118,10 @@ export const BD_ROUTE_SEGMENTS: readonly RouteSegment[] = [
     tollFee: 300,
     hasParallelRail: true,
     isHub: true,
-    mapX: 408,
-    mapY: 378,
+    mapX: 290,
+    mapY: 408,
+    labelAnchor: 'left',
+    labelDy: 14,
     tagline: '৪.৮ কিমি যমুনা সেতু — পাশে ছুটে চলেছে আন্তঃনগর ট্রেন!',
   },
   {
@@ -124,8 +131,8 @@ export const BD_ROUTE_SEGMENTS: readonly RouteSegment[] = [
     startM: 27500,
     endM: 34000,
     biome: 'north_bengal',
-    mapX: 446,
-    mapY: 405,
+    mapX: 332,
+    mapY: 422,
     tagline: 'টাঙ্গাইল চমচম আর এলেঙ্গা-চন্দ্রা এক্সপ্রেস!',
   },
   {
@@ -135,8 +142,8 @@ export const BD_ROUTE_SEGMENTS: readonly RouteSegment[] = [
     startM: 34000,
     endM: 35800,
     biome: 'flyover',
-    mapX: 492,
-    mapY: 444,
+    mapX: 384,
+    mapY: 462,
     tagline: 'ঢাকায় প্রবেশের উড়ালসড়ক!',
   },
   {
@@ -148,8 +155,10 @@ export const BD_ROUTE_SEGMENTS: readonly RouteSegment[] = [
     biome: 'dhaka_city',
     hasParallelRail: true,
     isHub: true,
-    mapX: 506,
-    mapY: 492,
+    mapX: 382,
+    mapY: 508,
+    labelAnchor: 'right',
+    labelDy: -8,
     tagline: 'মেট্রোরেলের নিচে আসল বাম প্লাস্টিক চাপানি!',
   },
   {
@@ -159,8 +168,8 @@ export const BD_ROUTE_SEGMENTS: readonly RouteSegment[] = [
     startM: 42500,
     endM: 44200,
     biome: 'flyover',
-    mapX: 515,
-    mapY: 515,
+    mapX: 392,
+    mapY: 526,
     tagline: 'মাওয়া এক্সপ্রেসওয়ে ধরে পদ্মার পথে!',
   },
   {
@@ -174,8 +183,10 @@ export const BD_ROUTE_SEGMENTS: readonly RouteSegment[] = [
     tollFee: 250,
     hasParallelRail: true,
     isHub: true,
-    mapX: 492,
+    mapX: 372,
     mapY: 566,
+    labelAnchor: 'left',
+    labelDy: 10,
     tagline: 'স্বপ্নের পদ্মা সেতু — নীল স্টিলের ট্রাস আর উত্তাল নদী!',
   },
   {
@@ -187,8 +198,10 @@ export const BD_ROUTE_SEGMENTS: readonly RouteSegment[] = [
     biome: 'river_bridge',
     bridgeStyle: 'meghna',
     tollFee: 200,
-    mapX: 562,
-    mapY: 536,
+    mapX: 424,
+    mapY: 535,
+    labelAnchor: 'right',
+    labelDy: -10,
     tagline: 'চট্টগ্রাম মহাসড়কের মেঘনা সেতু!',
   },
   {
@@ -198,7 +211,7 @@ export const BD_ROUTE_SEGMENTS: readonly RouteSegment[] = [
     startM: 50200,
     endM: 54500,
     biome: 'rain_highway',
-    mapX: 590,
+    mapX: 446,
     mapY: 556,
     tagline: 'হঠাৎ কালবৈশাখী বৃষ্টি — পিচ্ছিল রাস্তায় বোনাস ড্রাইভ!',
   },
@@ -211,8 +224,10 @@ export const BD_ROUTE_SEGMENTS: readonly RouteSegment[] = [
     biome: 'river_bridge',
     bridgeStyle: 'gumti',
     tollFee: 180,
-    mapX: 616,
-    mapY: 572,
+    mapX: 464,
+    mapY: 568,
+    labelAnchor: 'left',
+    labelDy: 16,
     tagline: 'বৃষ্টির মাঝে লাল-সোনালী গোমতী সেতু!',
   },
   {
@@ -224,8 +239,10 @@ export const BD_ROUTE_SEGMENTS: readonly RouteSegment[] = [
     biome: 'rain_highway',
     hasParallelRail: true,
     isHub: true,
-    mapX: 648,
-    mapY: 590,
+    mapX: 494,
+    mapY: 582,
+    labelAnchor: 'right',
+    labelDy: 4,
     tagline: 'কুমিল্লার রসমালাই আর বৃষ্টিস্নাত হাইওয়ে!',
   },
   {
@@ -235,8 +252,8 @@ export const BD_ROUTE_SEGMENTS: readonly RouteSegment[] = [
     startM: 63500,
     endM: 65200,
     biome: 'flyover',
-    mapX: 678,
-    mapY: 634,
+    mapX: 520,
+    mapY: 648,
     tagline: 'ফেনী মহিপাল ফ্লাইওভার — পাহাড়ি সূর্যাস্ত শুরু!',
   },
   {
@@ -248,8 +265,9 @@ export const BD_ROUTE_SEGMENTS: readonly RouteSegment[] = [
     biome: 'hills',
     hasParallelRail: true,
     isHub: true,
-    mapX: 735,
-    mapY: 716,
+    mapX: 576,
+    mapY: 735,
+    labelAnchor: 'left',
     tagline: 'সবুজ পাহাড় আর সোনালী সূর্যাস্তের চট্টগ্রাম!',
   },
   {
@@ -262,8 +280,10 @@ export const BD_ROUTE_SEGMENTS: readonly RouteSegment[] = [
     bridgeStyle: 'karnaphuli',
     tollFee: 200,
     isHub: true,
-    mapX: 764,
-    mapY: 762,
+    mapX: 594,
+    mapY: 772,
+    labelAnchor: 'right',
+    labelDy: 6,
     tagline: 'ঝুলন্ত তারের শাহ আমানত সেতু — হেডলাইট অন!',
   },
   {
@@ -274,8 +294,9 @@ export const BD_ROUTE_SEGMENTS: readonly RouteSegment[] = [
     endM: 84000,
     biome: 'marine_drive',
     isHub: true,
-    mapX: 822,
-    mapY: 882,
+    mapX: 638,
+    mapY: 908,
+    labelAnchor: 'left',
     tagline: 'বামে পাহাড়, ডানে বঙ্গোপসাগর — কক্সবাজার পৌঁছে গেছি!',
   },
 ] as const;
@@ -314,7 +335,6 @@ export function sampleRouteState(distanceM: number): RouteSample {
   const segment = BD_ROUTE_SEGMENTS[segmentIndex];
   const nextSegment = BD_ROUTE_SEGMENTS[(segmentIndex + 1) % BD_ROUTE_SEGMENTS.length];
 
-  // Smooth cosine elevation ramps on bridges & flyovers
   let elevationY = 0;
   let slopePitch = 0;
   if (segment.biome === 'river_bridge' || segment.biome === 'flyover') {
@@ -324,31 +344,27 @@ export function sampleRouteState(distanceM: number): RouteSample {
     if (local < ramp) {
       const t = local / ramp;
       elevationY = MAX_ELEVATION_Y * 0.5 * (1 - Math.cos(Math.PI * t));
-      slopePitch = 0.085 * Math.sin(Math.PI * t); // Nose up
+      slopePitch = 0.085 * Math.sin(Math.PI * t);
     } else if (local > segLen - ramp) {
       const t = (segLen - local) / ramp;
       elevationY = MAX_ELEVATION_Y * 0.5 * (1 - Math.cos(Math.PI * t));
-      slopePitch = -0.085 * Math.sin(Math.PI * t); // Nose down
+      slopePitch = -0.085 * Math.sin(Math.PI * t);
     } else {
       elevationY = MAX_ELEVATION_Y;
       slopePitch = 0;
     }
   }
 
-  // Smoothly interpolate time of day (0..1 across full 84 km lap)
   const timeOfDay = lapDist / FULL_ROUTE_M;
 
-  // Monsoon rain wave around Daudkandi -> Gumti -> Comilla (50,200m - 63,500m)
   let rainIntensity = 0;
   if (lapDist >= 50000 && lapDist <= 63800) {
     const t = (lapDist - 50000) / (63800 - 50000);
     rainIntensity = Math.sin(Math.PI * t) * 0.95;
   }
 
-  // Headlights turn on automatically from dusk/sunset through Marine Drive night & heavy rain
   const headlightsOn = lapDist >= 71500 || rainIntensity >= 0.55;
 
-  // Interpolate bus marker position along map polyline
   const segSpan = Math.max(1, segment.endM - segment.startM);
   const segProgress = Math.max(0, Math.min(1, (lapDist - segment.startM) / segSpan));
   const mapX = segment.mapX + (nextSegment.mapX - segment.mapX) * segProgress;
