@@ -1,4 +1,5 @@
 export interface MurirTinSave {
+  playerName: string;
   taka: number;
   bestScore: number;
   bestDistanceM: number;
@@ -15,6 +16,7 @@ const SAVE_KEY = 'murir_tin_3d_save_v1';
 
 export function createDefaultSave(): MurirTinSave {
   return {
+    playerName: '',
     taka: 250,
     bestScore: 0,
     bestDistanceM: 0,
@@ -31,7 +33,10 @@ export function createDefaultSave(): MurirTinSave {
 export class SaveStore {
   private data: MurirTinSave;
 
-  constructor(private readonly storage: Pick<Storage, 'getItem' | 'setItem'> | null = typeof localStorage !== 'undefined' ? localStorage : null) {
+  constructor(
+    private readonly storage: Pick<Storage, 'getItem' | 'setItem'> | null =
+      typeof localStorage !== 'undefined' ? localStorage : null
+  ) {
     this.data = this.load();
   }
 
@@ -45,6 +50,7 @@ export class SaveStore {
       return {
         ...def,
         ...parsed,
+        playerName: typeof parsed.playerName === 'string' ? parsed.playerName.slice(0, 24) : '',
         unlockedSkins: Array.isArray(parsed.unlockedSkins) ? parsed.unlockedSkins : ['classic_mirpur'],
       };
     } catch {

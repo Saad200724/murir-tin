@@ -1,6 +1,7 @@
 import { getViralTitle } from '../core/RoadSimulation';
 
 export interface ScorecardStats {
+  playerName?: string;
   score: number;
   distanceM: number;
   takaEarned: number;
@@ -8,24 +9,25 @@ export interface ScorecardStats {
   teslaDodges: number;
   passengers: number;
   stopName: string;
+  padmaCrossings: number;
+  totalTollPaid: number;
 }
 
 /**
- * Renders a shareable Dhaka Meme Scorecard image onto a <canvas> for Facebook / Messenger flexing!
+ * Renders a crisp Dhaka Meme Scorecard without any text collision across Bengali & numeric labels.
  */
 export function renderMemeScorecard(canvas: HTMLCanvasElement, stats: ScorecardStats): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  const w = 640;
-  const h = 380;
+  const w = 760;
+  const h = 470;
   canvas.width = w;
   canvas.height = h;
 
-  // Rickshaw-art vibrant gradient background
   const grad = ctx.createLinearGradient(0, 0, w, h);
-  grad.addColorStop(0, '#1b1f2a');
-  grad.addColorStop(1, '#2d1e3e');
+  grad.addColorStop(0, '#181c28');
+  grad.addColorStop(1, '#2c1b3b');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, w, h);
 
@@ -40,47 +42,67 @@ export function renderMemeScorecard(canvas: HTMLCanvasElement, stats: ScorecardS
   // Header
   ctx.fillStyle = '#ffbe0b';
   ctx.textAlign = 'center';
-  ctx.font = 'bold 28px "Hind Siliguri", "Segoe UI", sans-serif';
-  ctx.fillText('🚌 মুড়ির টিন এক্সপ্রেস — রিপোর্ট কার্ড', w / 2, 66);
+  ctx.font = 'bold 29px "Hind Siliguri", "Segoe UI", sans-serif';
+  ctx.fillText('🚌 মুড়ির টিন এক্সপ্রেস — রিপোর্ট কার্ড', w / 2, 62, w - 80);
 
-  // Viral Title Badge
+  // Player Name + Viral Title
+  const cleanName = stats.playerName?.trim();
   const title = getViralTitle(stats.score);
-  ctx.fillStyle = '#06d6a0';
-  ctx.font = 'bold 24px "Hind Siliguri", "Segoe UI", sans-serif';
-  ctx.fillText(`খেতাব: ${title}`, w / 2, 108);
+  if (cleanName) {
+    ctx.fillStyle = '#fffdf7';
+    ctx.font = 'bold 20px "Hind Siliguri", "Segoe UI", sans-serif';
+    ctx.fillText(`ওস্তাদ: ${cleanName}`, w / 2, 94, w - 90);
+    ctx.fillStyle = '#06d6a0';
+    ctx.font = 'bold 22px "Hind Siliguri", "Segoe UI", sans-serif';
+    ctx.fillText(`খেতাব: ${title}`, w / 2, 124, w - 90);
+  } else {
+    ctx.fillStyle = '#06d6a0';
+    ctx.font = 'bold 24px "Hind Siliguri", "Segoe UI", sans-serif';
+    ctx.fillText(`খেতাব: ${title}`, w / 2, 108, w - 90);
+  }
 
-  // Stats Grid
-  const rows: [string, string][] = [
-    ['🏆 মোট পয়েন্ট:', `${stats.score.toLocaleString()} pts`],
-    ['📍 শেষ স্টপ:', `${stats.stopName} (${Math.floor(stats.distanceM)}m)`],
-    ['💥 প্লাস্টিক ঘষা:', `${stats.plasticScrapes} টি`],
-    ['⚡ দেশি টেসলা ডজ:', `${stats.teslaDodges} টি`],
-    ['👥 বাদুড়ঝোলা যাত্রী:', `${stats.passengers} জন`],
-    ['💵 ভাড়া আদায়:', `৳ ${stats.takaEarned.toLocaleString()}`],
+  // Stacked 2-line Stat Cards (zero left/right collision!)
+  const cards: [string, string][] = [
+    ['🏆 মোট পয়েন্ট', `${stats.score.toLocaleString()} pts`],
+    ['📍 শেষ স্টপ ও দূরত্ব', `${stats.stopName} (${Math.floor(stats.distanceM)}m)`],
+    ['🌉 পদ্মা সেতু ও টোল', `${stats.padmaCrossings} বার • টোল ৳${stats.totalTollPaid.toLocaleString()}`],
+    ['💥 চাপানি ও টেসলা ডজ', `ঘষা ${stats.plasticScrapes}টি • ডজ ${stats.teslaDodges}টি`],
+    ['👥 বাদুড়ঝোলা যাত্রী', `${stats.passengers} জন`],
+    ['💵 নিট ভাড়া আদায়', `৳ ${stats.takaEarned.toLocaleString()}`],
   ];
 
-  ctx.font = '600 20px "Hind Siliguri", "Segoe UI", sans-serif';
-  rows.forEach(([label, val], i) => {
+  const cardW = 326;
+  const cardH = 68;
+  const startX = 44;
+  const colGap = 20;
+  const startY = 148;
+  const rowGap = 14;
+
+  cards.forEach(([label, val], i) => {
     const col = i % 2;
     const row = Math.floor(i / 2);
-    const x = col === 0 ? 52 : 342;
-    const y = 162 + row * 52;
+    const x = startX + col * (cardW + colGap);
+    const y = startY + row * (cardH + rowGap);
 
-    ctx.fillStyle = 'rgba(255,255,255,0.08)';
-    ctx.fillRect(x - 12, y - 28, 272, 40);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.fillRect(x, y, cardW, cardH);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x, y, cardW, cardH);
 
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#e2e8f0';
-    ctx.fillText(label, x, y);
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = '600 15px "Hind Siliguri", "Segoe UI", sans-serif';
+    ctx.fillText(label, x + 14, y + 24, cardW - 28);
 
-    ctx.textAlign = 'right';
     ctx.fillStyle = '#ffbe0b';
-    ctx.fillText(val, x + 248, y);
+    ctx.font = 'bold 21px "Hind Siliguri", "Segoe UI", sans-serif';
+    ctx.fillText(val, x + 14, y + 53, cardW - 28);
   });
 
   // Footer CTA
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ffb3c6';
   ctx.font = 'bold 17px "Hind Siliguri", "Segoe UI", sans-serif';
-  ctx.fillText('ব্রেক নাই, লুকিং গ্লাস নাই — সাহস থাকলে এই স্কোর ভাঙ্গো! 🔥', w / 2, 344);
+  ctx.fillText('ব্রেক নাই, লুকিং গ্লাস নাই — সাহস থাকলে এই স্কোর ভাঙ্গো! 🔥', w / 2, 434, w - 80);
 }

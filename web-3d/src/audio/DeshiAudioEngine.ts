@@ -3,7 +3,7 @@
  * - Continuous diesel rumble synced to bus speed
  * - Multi-tone Hydraulic Air Horn ("প্যাঁ-পোঁ-প্যাঁ!")
  * - Helper metal door double-slap ("ঠক্-ঠক্!")
- * - Metallic Chapani scrape sparks, Cash chime, Nitro roar, Crash boom
+ * - Metallic Chapani scrape sparks, Combo chimes, Toll ETC chime, Barrier smash, Milestone fanfare
  */
 export class DeshiAudioEngine {
   private ctx: AudioContext | null = null;
@@ -22,7 +22,9 @@ export class DeshiAudioEngine {
 
   public unlock(): void {
     if (!this.ctx) {
-      const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const AC =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (!AC) return;
       this.ctx = new AC();
     }
@@ -98,20 +100,20 @@ export class DeshiAudioEngine {
   public playHydraulicHorn(): void {
     if (!this.soundEnabled) return;
     this.unlock();
-    // Classic 3-burst Dhaka Bus Air Horn!
     this.tone(330, 0.13, 'sawtooth', 0.12, 315, 0);
-    this.tone(415, 0.13, 'sawtooth', 0.10, 395, 0);
+    this.tone(415, 0.13, 'sawtooth', 0.1, 395, 0);
     this.tone(330, 0.11, 'sawtooth', 0.12, 315, 0.16);
-    this.tone(415, 0.11, 'sawtooth', 0.10, 395, 0.16);
-    this.tone(392, 0.24, 'sawtooth', 0.13, 360, 0.30);
-    this.tone(494, 0.24, 'sawtooth', 0.10, 460, 0.30);
+    this.tone(415, 0.11, 'sawtooth', 0.1, 395, 0.16);
+    this.tone(392, 0.24, 'sawtooth', 0.13, 360, 0.3);
+    this.tone(494, 0.24, 'sawtooth', 0.1, 460, 0.3);
   }
 
-  public playChapaniSparks(): void {
+  public playChapaniSparks(combo = 1): void {
     if (!this.soundEnabled) return;
     this.unlock();
-    this.tone(920, 0.09, 'triangle', 0.16, 1380, 0);
-    this.tone(1240, 0.14, 'sine', 0.15, 1680, 0.06);
+    const pitchBoost = Math.min(600, Math.max(0, combo - 1) * 75);
+    this.tone(900 + pitchBoost, 0.09, 'triangle', 0.15, 1360 + pitchBoost, 0);
+    this.tone(1220 + pitchBoost, 0.14, 'sine', 0.14, 1680 + pitchBoost, 0.06);
   }
 
   public playHelperDoorSlap(): void {
@@ -120,6 +122,28 @@ export class DeshiAudioEngine {
     this.tone(190, 0.06, 'square', 0.15, 95, 0);
     this.tone(210, 0.06, 'square', 0.15, 105, 0.09);
     this.tone(720, 0.16, 'triangle', 0.12, 980, 0.16);
+  }
+
+  public playTollPaid(): void {
+    if (!this.soundEnabled) return;
+    this.unlock();
+    this.tone(880, 0.1, 'sine', 0.14, 880, 0);
+    this.tone(1174, 0.18, 'triangle', 0.15, 1318, 0.1);
+  }
+
+  public playBarrierSmash(): void {
+    if (!this.soundEnabled) return;
+    this.unlock();
+    this.tone(180, 0.25, 'sawtooth', 0.2, 55, 0);
+    this.tone(620, 0.18, 'triangle', 0.15, 1280, 0.05);
+  }
+
+  public playMilestoneFanfare(): void {
+    if (!this.soundEnabled) return;
+    this.unlock();
+    this.tone(523, 0.12, 'triangle', 0.14, 523, 0);
+    this.tone(659, 0.12, 'triangle', 0.14, 659, 0.11);
+    this.tone(784, 0.26, 'triangle', 0.16, 1046, 0.22);
   }
 
   public playCrash(): void {
