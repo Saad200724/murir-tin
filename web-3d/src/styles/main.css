@@ -1342,7 +1342,386 @@ dialog::backdrop {
   accent-color: var(--rickshaw-yellow);
 }
 
+/* Entry Screen Mode Picker (Singleplayer vs Multiplayer Play with Friends) */
+.title-name-row {
+  margin-bottom: 0.65rem;
+}
+
+.mode-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+  margin-bottom: 0.65rem;
+}
+
+.mode-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.18rem;
+  padding: 0.72rem 0.55rem;
+  border-radius: 16px;
+  background: rgb(255 255 255 / 0.08);
+  border: 2.5px solid rgb(255 255 255 / 0.22);
+  color: var(--cream);
+  text-align: center;
+}
+
+.mode-card .mode-emoji {
+  font-size: 1.45rem;
+  line-height: 1.1;
+}
+
+.mode-card strong {
+  font-size: 0.98rem;
+  color: #ffffff;
+}
+
+.mode-card small {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.mode-card.is-selected {
+  border-color: var(--rickshaw-yellow);
+  background: rgb(255 190 11 / 0.16);
+}
+
+.mode-card-mp {
+  border-color: var(--bus-green);
+  background: linear-gradient(160deg, rgb(6 214 160 / 0.2), rgb(16 185 129 / 0.08));
+}
+
+.mode-card-mp strong {
+  color: #72efdd;
+}
+
+.mode-pill {
+  position: absolute;
+  top: -8px;
+  right: 8px;
+  background: var(--bus-crimson);
+  color: #ffffff;
+  font-size: 0.66rem;
+  font-weight: 800;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  border: 1.5px solid var(--rickshaw-yellow);
+}
+
+.solo-launch-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+/* Live Multiplayer Race Strip & Countdown */
+.race-hud-strip {
+  width: min(94vw, 580px);
+  background: rgb(15 20 32 / 0.9);
+  border: 2px solid var(--bus-green);
+  border-radius: 14px;
+  padding: 0.35rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  pointer-events: none;
+}
+
+.race-hud-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.race-rank-badge {
+  background: var(--rickshaw-yellow);
+  color: var(--ink);
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+}
+
+.race-route-badge {
+  color: #fffdf7;
+}
+
+.race-remain-badge {
+  color: #72efdd;
+}
+
+.race-progress-track {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.14);
+  overflow: visible;
+}
+
+.race-progress-dot {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  border: 2px solid #0f172a;
+  box-shadow: 0 0 6px rgb(0 0 0 / 0.65);
+}
+
+.race-progress-dot.is-self {
+  width: 15px;
+  height: 15px;
+  border-color: #ffffff;
+  z-index: 2;
+}
+
+.race-countdown {
+  position: fixed;
+  inset: 0;
+  z-index: 28;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  background: rgb(10 14 24 / 0.58);
+  backdrop-filter: blur(3px);
+  pointer-events: none;
+  text-align: center;
+  padding: 1rem;
+}
+
+.race-countdown-num {
+  font-size: clamp(3.6rem, 12vw, 6.2rem);
+  font-weight: 900;
+  color: var(--rickshaw-yellow);
+  text-shadow: 0 6px 24px rgb(0 0 0 / 0.75);
+}
+
+.race-countdown-sub {
+  background: rgb(27 31 42 / 0.92);
+  border: 2px solid var(--bus-green);
+  color: #fffdf7;
+  font-weight: 700;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+}
+
+/* Multiplayer Lobby Dialog */
+.mp-view {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.mp-tabpanel {
+  padding-top: 0.25rem;
+}
+
+.mp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.mp-custom-route-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.mp-error-text {
+  color: #ff6b8b;
+}
+
+.mp-room-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  background: rgb(6 214 160 / 0.12);
+  border: 2px solid var(--bus-green);
+  border-radius: 14px;
+  padding: 0.65rem 0.85rem;
+}
+
+.mp-code-label {
+  display: block;
+  font-size: 0.72rem;
+  color: #cbd5e1;
+}
+
+.mp-code-value {
+  font-size: 1.45rem;
+  letter-spacing: 0.12em;
+  color: var(--rickshaw-yellow);
+}
+
+.mp-route-summary {
+  display: flex;
+  flex-direction: column;
+  text-align: right;
+  font-size: 0.86rem;
+}
+
+.mp-route-summary strong {
+  color: #72efdd;
+}
+
+.mp-route-summary span {
+  font-size: 0.76rem;
+  color: #cbd5e1;
+}
+
+.mp-invite-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.mp-invite-row input {
+  flex: 1;
+  min-inline-size: 0;
+  font-size: 0.8rem;
+  color: #93c5fd;
+}
+
+.copy {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.copy-button {
+  white-space: nowrap;
+}
+
+.copy .tip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  background: #06d6a0;
+  color: #0b241d;
+  font-size: 0.76rem;
+  font-weight: 800;
+  padding: 0.2rem 0.55rem;
+  border-radius: 8px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+
+.copy-button[data-copied] + .tip,
+.copy-button[data-failed] + .tip {
+  opacity: 1;
+}
+
+.copy-button[data-failed] + .tip {
+  background: #ef476f;
+  color: #ffffff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .copy .tip {
+    transition: opacity 0.01ms linear;
+  }
+}
+
+.mp-player-list,
+.race-standings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.mp-player-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  background: rgb(255 255 255 / 0.07);
+  border: 1.5px solid rgb(255 255 255 / 0.14);
+  border-radius: 12px;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.86rem;
+}
+
+.mp-player-row.is-self {
+  border-color: var(--rickshaw-yellow);
+  background: rgb(255 190 11 / 0.1);
+}
+
+.mp-player-left {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.mp-color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.mp-player-bus {
+  display: block;
+  font-size: 0.72rem;
+  color: #cbd5e1;
+}
+
+.mp-ready-badge {
+  font-size: 0.76rem;
+  font-weight: 800;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: rgb(255 255 255 / 0.12);
+  color: #ffd166;
+}
+
+.mp-ready-badge.is-ready {
+  background: rgb(6 214 160 / 0.22);
+  color: #72efdd;
+}
+
+.mp-lobby-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.mp-lobby-actions button {
+  flex: 1 1 130px;
+}
+
 @media (max-width: 640px) {
+  .mp-custom-route-row {
+    grid-template-columns: 1fr;
+  }
+  .mp-route-summary {
+    text-align: left;
+  }
+  .mp-invite-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
   .hud-route {
     order: 3;
     flex: 1 0 100%;

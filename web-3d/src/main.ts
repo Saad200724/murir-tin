@@ -11,7 +11,33 @@ import {
   submitLeaderboardScore,
   type LeaderboardEntry,
 } from './core/LeaderboardClient';
-import { RoadSimulation, type InputState } from './core/RoadSimulation';
+import {
+  OpponentInterpolator,
+  buildRoomInviteUrl,
+  createRaceRoom,
+  fetchRaceRoom,
+  joinRaceRoom,
+  leaveRaceRoom,
+  rematchRaceRoom,
+  setRaceReady,
+  setRaceRoute,
+  startRaceRoom,
+  syncRaceTelemetry,
+} from './core/MultiplayerClient';
+import {
+  SPRINT_ROUTE_PRESETS,
+  buildCustomSprintRoute,
+  formatRaceTime,
+  sortRaceStandings,
+  type InterpolatedOpponent,
+  type RaceRoomState,
+  type SprintRouteConfig,
+} from './core/MultiplayerTypes';
+import {
+  RoadSimulation,
+  createSeededRandom,
+  type InputState,
+} from './core/RoadSimulation';
 import {
   SaveStore,
   createDefaultKeymap,
@@ -21,10 +47,10 @@ import {
 } from './core/SaveStore';
 import { DhakaWorld3D } from './scene/DhakaWorld3D';
 import { BangladeshMapView } from './ui/BangladeshMapView';
-import { wireNativeDialogs } from './ui/DialogHelpers';
+import { wireCopyButtons, wireNativeDialogs } from './ui/DialogHelpers';
 import { GarageShowroom3D } from './ui/GarageShowroom3D';
-import { renderMiniMap } from './ui/MiniMapCanvas';
-import { renderMemeScorecard } from './ui/ScorecardCanvas';
+import { renderMiniMap, type MiniMapRemoteRacer } from './ui/MiniMapCanvas';
+import { renderMemeScorecard, renderRacePodiumCard } from './ui/ScorecardCanvas';
 
 const GEAR_LIFE_SVG = `<svg class="gear-life-svg" viewBox="0 0 64 64" aria-hidden="true"><path fill="#2196f3" d="M36 6h-8l-1.8 6.4a19 19 0 0 0-5.4 2.2l-5.8-3.4-5.6 5.6 3.4 5.8a19 19 0 0 0-2.2 5.4L6 28v8l6.4 1.8a19 19 0 0 0 2.2 5.4l-3.4 5.8 5.6 5.6 5.8-3.4a19 19 0 0 0 5.4 2.2L28 58h8l1.8-6.4a19 19 0 0 0 5.4-2.2l5.8 3.4 5.6-5.6-3.4-5.8a19 19 0 0 0 2.2-5.4L58 36v-8l-6.4-1.8a19 19 0 0 0-2.2-5.4l3.4-5.8-5.6-5.6-5.8 3.4a19 19 0 0 0-5.4-2.2z"/><circle cx="32" cy="32" r="11" fill="#e2e8f0"/><path fill="#cbd5e1" stroke="#1b1f2a" stroke-width="2.5" d="M41 18a9 9 0 0 0-11 11L14 45a4 4 0 0 0 5.6 5.6L35.5 35A9 9 0 0 0 46 23l-4.5 4.5-4-4z"/></svg>`;
 
@@ -73,6 +99,22 @@ class MurirTinApp {
   private waitingForRebind: keyof KeymapConfig | null = null;
   private challenge: ChallengeTarget | null = null;
 
+  // Friends Multiplayer State
+  private activeRoom: RaceRoomState | null = null;
+  private mpPlayerId: string | null = null;
+  private mpMode = false;
+  private mpCountdownActive = false;
+  private mpCountdownLastTick = '';
+  private mpServerOffsetMs = 0;
+  private mpRaceStartedAt = 0;
+  private mpRaceRand: () => number = Math.random;
+  private mpPollTimer = 0;
+  private mpSyncInFlight = false;
+  private mpSyncAccum = 0;
+  private mpRewardBanked = false;
+  private reopenMpAfterGarage = false;
+  private readonly opponentInterp = new OpponentInterpolator();
+
   private readonly keys = new Set<string>();
   private touchSteer = 0;
   private touchBrake = false;
@@ -119,17 +161,27 @@ class MurirTinApp {
   private readonly garageDialog = document.getElementById('garage-dialog') as HTMLDialogElement;
   private readonly gameoverDialog = document.getElementById('gameover-dialog') as HTMLDialogElement;
   private readonly leaderboardDialog = document.getElementById('leaderboard-dialog') as HTMLDialogElement;
+  private readonly mpDialog = document.getElementById('multiplayer-dialog') as HTMLDialogElement;
+  private readonly raceResultDialog = document.getElementById('race-result-dialog') as HTMLDialogElement;
+  private readonly raceHudStrip = document.getElementById('race-hud-strip')!;
+  private readonly raceProgressBar = document.getElementById('race-progress-bar')!;
+  private readonly raceCountdownEl = document.getElementById('race-countdown')!;
+  private readonly raceCountdownNumEl = document.getElementById('race-countdown-num')!;
+  private readonly raceCountdownSubEl = document.getElementById('race-countdown-sub')!;
+  private readonly racePodiumCanvas = document.getElementById('race-podium-canvas') as HTMLCanvasElement;
   private readonly scorecardCanvas = document.getElementById('scorecard-canvas') as HTMLCanvasElement;
 
   public async init(): Promise<void> {
     wireNativeDialogs();
-    this.parseChallengeParams();
+    wireCopyButtons();
+    const pendingRoomCode = this.parseChallengeParams();
 
     this.world = new DhakaWorld3D(this.stageEl);
     this.showroom = new GarageShowroom3D(document.getElementById('showroom-stage')!);
     this.applySavedVisualAudioSettings();
 
     this.bdMap = new BangladeshMapView(document.getElementById('bd-map-mount')!, (seg) => {
+      if (this.mpMode) return;
       this.activeStartM = seg.startM;
       this.pauseDialog.close();
       this.startNewRun(seg.startM);
@@ -137,8 +189,10 @@ class MurirTinApp {
 
     this.createSimulationFromSave(0);
     this.populateHubSelector();
+    this.populateMultiplayerSelectors();
     this.bindPauseTabs();
     this.bindGarageControls();
+    this.bindMultiplayerControls();
     this.bindControls();
     this.setupLifecycleAndBackHandler();
     this.syncNameInputs();
@@ -153,10 +207,19 @@ class MurirTinApp {
     void this.syncLiveChampionBillboard();
 
     window.addEventListener('resize', () => this.world.resize());
+    window.addEventListener('beforeunload', () => {
+      if (this.activeRoom && this.mpPlayerId) {
+        void leaveRaceRoom(this.activeRoom.code, this.mpPlayerId);
+      }
+    });
+
+    if (pendingRoomCode) {
+      this.openMultiplayerDialog('mptab-join', pendingRoomCode);
+    }
     this.startLoop();
   }
 
-  private parseChallengeParams(): void {
+  private parseChallengeParams(): string {
     const params = new URLSearchParams(window.location.search);
     const vs = params.get('vs')?.trim();
     const target = Number(params.get('target') || 0);
@@ -172,6 +235,7 @@ class MurirTinApp {
       banner.textContent = `⚔️ ${this.challenge.challenger} আপনাকে চ্যালেঞ্জ করেছে! টার্গেট: ${this.challenge.targetScore.toLocaleString()} pts`;
       banner.classList.remove('hidden');
     }
+    return (params.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
   }
 
   private async syncLiveChampionBillboard(): Promise<void> {
@@ -241,7 +305,9 @@ class MurirTinApp {
       this.pauseDialog.open ||
       this.garageDialog.open ||
       this.gameoverDialog.open ||
-      this.leaderboardDialog.open
+      this.leaderboardDialog.open ||
+      this.mpDialog.open ||
+      this.raceResultDialog.open
     );
   }
 
@@ -254,6 +320,10 @@ class MurirTinApp {
     const name = this.store.get().playerName;
     if (this.titleNameInput.value !== name) this.titleNameInput.value = name;
     if (this.gameoverNameInput.value !== name) this.gameoverNameInput.value = name;
+    const mpCreateName = document.getElementById('mp-name-create') as HTMLInputElement | null;
+    const mpJoinName = document.getElementById('mp-name-join') as HTMLInputElement | null;
+    if (mpCreateName && mpCreateName.value !== name) mpCreateName.value = name;
+    if (mpJoinName && mpJoinName.value !== name) mpJoinName.value = name;
   }
 
   private savePlayerName(raw: string): string {
@@ -423,6 +493,20 @@ class MurirTinApp {
   }
 
   private bindControls(): void {
+    const modeSoloBtn = document.getElementById('btn-mode-solo')!;
+    const modeMpBtn = document.getElementById('btn-mode-multiplayer')!;
+    modeSoloBtn.addEventListener('click', () => {
+      modeSoloBtn.classList.add('is-selected');
+      modeMpBtn.classList.remove('is-selected');
+      document.getElementById('btn-start-drive')?.focus();
+    });
+    modeMpBtn.addEventListener('click', () => {
+      if (this.titleNameInput.value.trim()) {
+        this.savePlayerName(this.titleNameInput.value);
+      }
+      this.openMultiplayerDialog(this.activeRoom ? 'mptab-create' : 'mptab-create');
+    });
+
     document.getElementById('btn-start-drive')!.addEventListener('click', () => {
       const startM = Number(this.startHubSelect.value) || 0;
       this.startNewRun(startM);
@@ -477,10 +561,18 @@ class MurirTinApp {
     });
     document.getElementById('btn-pause-restart')!.addEventListener('click', () => {
       this.pauseDialog.close();
+      if (this.mpMode) {
+        void this.exitMultiplayerCleanly();
+        return;
+      }
       this.startNewRun(this.activeStartM);
     });
     document.getElementById('btn-pause-home')!.addEventListener('click', () => {
       this.pauseDialog.close();
+      if (this.mpMode) {
+        void this.exitMultiplayerCleanly();
+        return;
+      }
       this.isPlaying = false;
       this.clearActiveInputs();
       this.driveControls.classList.add('hidden');
@@ -492,7 +584,7 @@ class MurirTinApp {
     const onModalClose = () => {
       this.waitingForRebind = null;
       this.modalPaused = this.anyDialogOpen();
-      if (!this.isPlaying) {
+      if (!this.isPlaying && !this.mpCountdownActive) {
         this.createSimulationFromSave(this.activeStartM);
         this.refreshHud();
       }
@@ -501,9 +593,30 @@ class MurirTinApp {
     this.pauseDialog.addEventListener('close', onModalClose);
     this.garageDialog.addEventListener('close', () => {
       this.showroom.stop();
+      if (this.reopenMpAfterGarage && this.activeRoom && this.mpPlayerId) {
+        this.reopenMpAfterGarage = false;
+        const me = this.activeRoom.players.find((p) => p.id === this.mpPlayerId);
+        void setRaceReady(
+          this.activeRoom.code,
+          this.mpPlayerId,
+          me?.ready ?? false,
+          this.store.get().selectedSkin
+        ).then((res) => {
+          this.activeRoom = res.room;
+          this.renderLobbyRoom();
+        }).catch(() => {});
+        this.mpDialog.showModal();
+      }
       onModalClose();
     });
     this.leaderboardDialog.addEventListener('close', onModalClose);
+    this.mpDialog.addEventListener('close', () => {
+      if (!this.mpCountdownActive && !this.mpMode) {
+        this.stopMpPolling();
+      }
+      onModalClose();
+    });
+    this.raceResultDialog.addEventListener('close', onModalClose);
 
     // Keyboard controls + ESC Pause + M Map + Keymap Rebind
     window.addEventListener('keydown', (e) => {
@@ -760,16 +873,23 @@ class MurirTinApp {
         }
       }
 
+      if (this.mpCountdownActive) {
+        this.updateMpCountdown(now);
+        this.world.sync(this.sim, dt);
+        return;
+      }
+
       if (this.isPlaying && !this.sim.crashed && !this.modalPaused) {
         const input = this.readInput(dt);
-        const events = this.sim.step(dt, input, Math.random, this.store.get().steerSensitivity);
+        const rng = this.mpMode ? this.mpRaceRand : Math.random;
+        const events = this.sim.step(dt, input, rng, this.store.get().steerSensitivity);
         this.audio.updateEngineRumble(this.sim.speed, true, this.sim.nitroActive);
 
         for (const ev of events) {
           this.handleSimEvent(ev);
         }
 
-        if (this.challenge && !this.challenge.beaten && this.sim.score > this.challenge.targetScore) {
+        if (!this.mpMode && this.challenge && !this.challenge.beaten && this.sim.score > this.challenge.targetScore) {
           this.challenge.beaten = true;
           this.audio.playMilestoneFanfare();
           this.triggerFlash('flash-fever');
@@ -777,10 +897,35 @@ class MurirTinApp {
           this.spawnFloatPop('⚔️ RECORD BROKEN!', 'pop-gold');
         }
 
+        let radarRacers: MiniMapRemoteRacer[] = [];
+        let finishRelZ: number | null = null;
+
+        if (this.mpMode && this.activeRoom && this.mpPlayerId) {
+          const opponents = this.opponentInterp.sample(dt, now);
+          this.world.syncRemoteRacers(this.sim, opponents, this.activeRoom.route.finishM);
+          radarRacers = opponents.map((o) => ({
+            x: o.x,
+            z: this.sim.distanceM - o.distanceM,
+            color: o.color,
+          }));
+          finishRelZ = this.sim.distanceM - this.activeRoom.route.finishM;
+          this.refreshRaceHud(opponents);
+
+          this.mpSyncAccum += dt;
+          if (this.mpSyncAccum >= 0.25 && !this.mpSyncInFlight) {
+            this.mpSyncAccum = 0;
+            void this.pushRaceSync(false);
+          }
+        }
+
         this.refreshHud();
-        renderMiniMap(this.minimapCanvas, this.sim, now);
+        renderMiniMap(this.minimapCanvas, this.sim, now, radarRacers, finishRelZ);
       } else {
         this.audio.updateEngineRumble(0, false, false);
+        if (this.mpMode && this.activeRoom && this.mpPlayerId) {
+          const opponents = this.opponentInterp.sample(dt, now);
+          this.world.syncRemoteRacers(this.sim, opponents, this.activeRoom.route.finishM);
+        }
       }
 
       this.world.sync(this.sim, dt);
@@ -855,6 +1000,11 @@ class MurirTinApp {
       this.world.triggerMinorShake();
       this.world.triggerSparkBurst(this.sim.playerX, 0, '#ef476f');
       this.spawnFloatPop('💥 -১ লাইফ', 'pop-crimson');
+    } else if (ev.type === 'race_finish') {
+      this.audio.playMilestoneFanfare();
+      this.triggerFlash('flash-fever');
+      this.spawnFloatPop('🏁 FINISH!', 'pop-gold');
+      void this.onLocalRaceFinished();
     } else if (ev.type === 'gameover') {
       this.audio.playCrash();
       this.triggerFlash('flash-crash');
@@ -1243,7 +1393,7 @@ class MurirTinApp {
     this.mmNitroFill.style.width = nitroPct;
     this.mmHealthFill.style.width = `${Math.round((hp / Math.max(1, this.sim.maxHealth)) * 100)}%`;
 
-    if (this.isPlaying) {
+    if (this.isPlaying && !this.mpMode) {
       const m = this.sim.activeMission;
       this.hudMission.textContent = `🎯 ${m.title} (${m.progress}/${m.target})`;
       this.hudMission.classList.remove('hidden');
@@ -1259,10 +1409,609 @@ class MurirTinApp {
       this.hudChallenge.classList.add('hidden');
     }
   }
-}
 
-// Keep unused import reference check satisfied
-void BD_ROUTE_SEGMENTS;
+  private populateMultiplayerSelectors(): void {
+    const setupSel = document.getElementById('mp-route-select') as HTMLSelectElement;
+    const lobbySel = document.getElementById('mp-lobby-route-select') as HTMLSelectElement;
+    const startSel = document.getElementById('mp-custom-start') as HTMLSelectElement;
+    const endSel = document.getElementById('mp-custom-end') as HTMLSelectElement;
+
+    setupSel.innerHTML = '';
+    lobbySel.innerHTML = '';
+    for (const preset of SPRINT_ROUTE_PRESETS) {
+      const o1 = new Option(`${preset.label}`, preset.id);
+      const o2 = new Option(`${preset.label}`, preset.id);
+      setupSel.add(o1);
+      lobbySel.add(o2);
+    }
+    setupSel.add(new Option('🛠️ কাস্টম রুট তৈরি করুন', 'custom'));
+
+    startSel.innerHTML = '';
+    endSel.innerHTML = '';
+    for (const seg of BD_ROUTE_SEGMENTS) {
+      const cleanName = seg.name.replace(' 🌉', '').replace(' 🏖️', '');
+      startSel.add(new Option(cleanName, seg.id));
+      endSel.add(new Option(cleanName, seg.id));
+    }
+    startSel.value = 'bogura';
+    endSel.value = 'sirajganj';
+  }
+
+  private readSelectedCreateRoute(): SprintRouteConfig {
+    const setupSel = document.getElementById('mp-route-select') as HTMLSelectElement;
+    if (setupSel.value === 'custom') {
+      const sId = (document.getElementById('mp-custom-start') as HTMLSelectElement).value;
+      const eId = (document.getElementById('mp-custom-end') as HTMLSelectElement).value;
+      const custom = buildCustomSprintRoute(sId, eId);
+      if (custom) return custom;
+    }
+    return SPRINT_ROUTE_PRESETS.find((r) => r.id === setupSel.value) ?? SPRINT_ROUTE_PRESETS[0];
+  }
+
+  private selectMpTab(tabId: 'mptab-create' | 'mptab-join'): void {
+    const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('#mp-setup-view [role="tab"]'));
+    const panels = Array.from(document.querySelectorAll<HTMLElement>('#mp-setup-view [role="tabpanel"]'));
+    for (const tab of tabs) {
+      tab.setAttribute('aria-selected', String(tab.id === tabId));
+    }
+    for (const panel of panels) {
+      panel.hidden = panel.getAttribute('aria-labelledby') !== tabId;
+    }
+  }
+
+  private openMultiplayerDialog(tabId: 'mptab-create' | 'mptab-join' = 'mptab-create', prefillCode = ''): void {
+    this.modalPaused = true;
+    this.clearActiveInputs();
+    this.syncNameInputs();
+    document.getElementById('mp-setup-error')!.textContent = '';
+
+    const setupView = document.getElementById('mp-setup-view')!;
+    const lobbyView = document.getElementById('mp-lobby-view')!;
+
+    if (this.activeRoom && this.mpPlayerId && this.activeRoom.status === 'lobby') {
+      setupView.classList.add('hidden');
+      lobbyView.classList.remove('hidden');
+      this.renderLobbyRoom();
+      this.startMpLobbyPolling();
+    } else {
+      setupView.classList.remove('hidden');
+      lobbyView.classList.add('hidden');
+      this.selectMpTab(tabId);
+      if (prefillCode) {
+        (document.getElementById('mp-join-code') as HTMLInputElement).value = prefillCode;
+      }
+    }
+
+    if (!this.mpDialog.open) {
+      this.mpDialog.showModal();
+    }
+  }
+
+  private bindMultiplayerControls(): void {
+    const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('#mp-setup-view [role="tab"]'));
+    for (const tab of tabs) {
+      tab.addEventListener('click', () => {
+        this.selectMpTab(tab.id as 'mptab-create' | 'mptab-join');
+      });
+      tab.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+          const next = tabs[0] === tab ? tabs[1] : tabs[0];
+          next.focus();
+          this.selectMpTab(next.id as 'mptab-create' | 'mptab-join');
+        }
+      });
+    }
+
+    const setupRouteSel = document.getElementById('mp-route-select') as HTMLSelectElement;
+    const customRow = document.getElementById('mp-custom-route-row')!;
+    setupRouteSel.addEventListener('change', () => {
+      customRow.classList.toggle('hidden', setupRouteSel.value !== 'custom');
+    });
+
+    const createNameEl = document.getElementById('mp-name-create') as HTMLInputElement;
+    const joinNameEl = document.getElementById('mp-name-join') as HTMLInputElement;
+    const joinCodeEl = document.getElementById('mp-join-code') as HTMLInputElement;
+    const errEl = document.getElementById('mp-setup-error')!;
+
+    document.getElementById('btn-mp-create')!.addEventListener('click', async () => {
+      const name = this.savePlayerName(createNameEl.value || this.titleNameInput.value || 'হোস্ট ওস্তাদ');
+      const route = this.readSelectedCreateRoute();
+      if (setupRouteSel.value === 'custom') {
+        const sId = (document.getElementById('mp-custom-start') as HTMLSelectElement).value;
+        const eId = (document.getElementById('mp-custom-end') as HTMLSelectElement).value;
+        if (!buildCustomSprintRoute(sId, eId)) {
+          errEl.textContent = 'শুরুর স্টপেজ অবশ্যই শেষের স্টপেজের আগে হতে হবে!';
+          return;
+        }
+      }
+      errEl.textContent = 'রুম তৈরি হচ্ছে...';
+      try {
+        const res = await createRaceRoom(name || 'হোস্ট ওস্তাদ', this.store.get().selectedSkin, route);
+        this.activeRoom = res.room;
+        this.mpPlayerId = res.playerId ?? res.room.hostId;
+        this.mpServerOffsetMs = res.serverTime - performance.now();
+        errEl.textContent = '';
+        this.enterLobbyView();
+      } catch (err) {
+        errEl.textContent = err instanceof Error ? err.message : 'রুম তৈরি করা যায়নি।';
+      }
+    });
+
+    document.getElementById('btn-mp-join')!.addEventListener('click', async () => {
+      const code = joinCodeEl.value.trim().toUpperCase();
+      if (code.length < 4) {
+        errEl.textContent = 'বন্ধুর রুম কোড লিখুন!';
+        joinCodeEl.focus();
+        return;
+      }
+      const name = this.savePlayerName(joinNameEl.value || this.titleNameInput.value || 'বন্ধু ওস্তাদ');
+      errEl.textContent = 'রুমে ঢোকা হচ্ছে...';
+      try {
+        const res = await joinRaceRoom(code, name || 'বন্ধু ওস্তাদ', this.store.get().selectedSkin);
+        this.activeRoom = res.room;
+        this.mpPlayerId = res.playerId ?? null;
+        this.mpServerOffsetMs = res.serverTime - performance.now();
+        errEl.textContent = '';
+        this.enterLobbyView();
+      } catch (err) {
+        errEl.textContent = err instanceof Error ? err.message : 'রুমে ঢোকা যায়নি।';
+      }
+    });
+
+    document.getElementById('btn-mp-ready')!.addEventListener('click', async () => {
+      if (!this.activeRoom || !this.mpPlayerId) return;
+      const me = this.activeRoom.players.find((p) => p.id === this.mpPlayerId);
+      const nextReady = !(me?.ready ?? false);
+      try {
+        const res = await setRaceReady(
+          this.activeRoom.code,
+          this.mpPlayerId,
+          nextReady,
+          this.store.get().selectedSkin
+        );
+        this.activeRoom = res.room;
+        this.renderLobbyRoom();
+      } catch (err) {
+        document.getElementById('mp-lobby-status')!.textContent =
+          err instanceof Error ? err.message : 'আপডেট করা যায়নি';
+      }
+    });
+
+    document.getElementById('mp-lobby-route-select')!.addEventListener('change', async (e) => {
+      if (!this.activeRoom || !this.mpPlayerId) return;
+      const routeId = (e.target as HTMLSelectElement).value;
+      const route = SPRINT_ROUTE_PRESETS.find((r) => r.id === routeId);
+      if (!route) return;
+      try {
+        const res = await setRaceRoute(this.activeRoom.code, this.mpPlayerId, route);
+        this.activeRoom = res.room;
+        this.renderLobbyRoom();
+      } catch (err) {
+        document.getElementById('mp-lobby-status')!.textContent =
+          err instanceof Error ? err.message : 'রুট পাল্টানো যায়নি';
+      }
+    });
+
+    document.getElementById('btn-mp-start')!.addEventListener('click', async () => {
+      if (!this.activeRoom || !this.mpPlayerId) return;
+      document.getElementById('mp-lobby-status')!.textContent = 'রেস শুরু হচ্ছে...';
+      try {
+        const res = await startRaceRoom(this.activeRoom.code, this.mpPlayerId);
+        this.activeRoom = res.room;
+        this.mpServerOffsetMs = res.serverTime - performance.now();
+        this.beginRaceCountdown(res.room, res.serverTime);
+      } catch (err) {
+        document.getElementById('mp-lobby-status')!.textContent =
+          err instanceof Error ? err.message : 'রেস শুরু করা যায়নি';
+      }
+    });
+
+    document.getElementById('btn-mp-garage')!.addEventListener('click', () => {
+      this.reopenMpAfterGarage = true;
+      this.mpDialog.close();
+      document.getElementById('btn-garage')?.click();
+    });
+
+    document.getElementById('btn-mp-leave')!.addEventListener('click', () => {
+      void this.exitMultiplayerCleanly();
+    });
+
+    document.getElementById('btn-race-rematch')!.addEventListener('click', async () => {
+      if (!this.activeRoom || !this.mpPlayerId) return;
+      const statusEl = document.getElementById('race-result-status')!;
+      if (this.activeRoom.hostId !== this.mpPlayerId) {
+        statusEl.textContent = 'হোস্ট রি-ম্যাচ শুরু করার জন্য অপেক্ষা করুন...';
+        return;
+      }
+      try {
+        const res = await rematchRaceRoom(this.activeRoom.code, this.mpPlayerId);
+        this.activeRoom = res.room;
+        this.raceResultDialog.close();
+        this.world.clearRemoteRacers();
+        this.raceHudStrip.classList.add('hidden');
+        this.mpMode = false;
+        this.isPlaying = false;
+        this.openMultiplayerDialog('mptab-create');
+      } catch (err) {
+        statusEl.textContent = err instanceof Error ? err.message : 'রি-ম্যাচ শুরু করা যায়নি';
+      }
+    });
+
+    document.getElementById('btn-race-download')!.addEventListener('click', () => {
+      const link = document.createElement('a');
+      link.download = `murir-tin-race-${this.activeRoom?.code ?? 'podium'}.png`;
+      link.href = this.racePodiumCanvas.toDataURL('image/png');
+      link.click();
+      document.getElementById('race-result-status')!.textContent = 'পোডিয়াম কার্ড ডাউনলোড হয়েছে!';
+    });
+
+    document.getElementById('btn-race-copy-result')!.addEventListener('click', async () => {
+      if (!this.activeRoom) return;
+      const standings = sortRaceStandings(this.activeRoom.players);
+      const lines = standings.map(
+        (p, i) => `${i + 1}. ${p.name} — ${p.finishMs !== null ? formatRaceTime(p.finishMs) : 'চলছে'}`
+      );
+      const text = `🏁 মুড়ির টিন 3D রেস (${this.activeRoom.route.label}):\n${lines.join('\n')}\nখেলতে আসো 👉 https://murirtin-express.vercel.app/`;
+      try {
+        await navigator.clipboard.writeText(text);
+        document.getElementById('race-result-status')!.textContent = 'রেজাল্ট কপি হয়েছে! গ্রুপে পেস্ট করুন!';
+      } catch {
+        document.getElementById('race-result-status')!.textContent = text;
+      }
+    });
+
+    document.getElementById('btn-race-home')!.addEventListener('click', () => {
+      void this.exitMultiplayerCleanly();
+    });
+  }
+
+  private enterLobbyView(): void {
+    document.getElementById('mp-setup-view')!.classList.add('hidden');
+    document.getElementById('mp-lobby-view')!.classList.remove('hidden');
+    this.renderLobbyRoom();
+    this.startMpLobbyPolling();
+  }
+
+  private renderLobbyRoom(): void {
+    const room = this.activeRoom;
+    if (!room) return;
+    const isHost = room.hostId === this.mpPlayerId;
+
+    document.getElementById('mp-room-code-display')!.textContent = room.code;
+    document.getElementById('mp-lobby-route-label')!.textContent = room.route.label;
+    document.getElementById('mp-lobby-route-sub')!.textContent = room.route.subtitle;
+    (document.getElementById('mp-invite-url') as HTMLInputElement).value = buildRoomInviteUrl(room.code);
+
+    const hostRouteWrap = document.getElementById('mp-host-route-wrap')!;
+    hostRouteWrap.classList.toggle('hidden', !isHost);
+    const lobbyRouteSel = document.getElementById('mp-lobby-route-select') as HTMLSelectElement;
+    if (SPRINT_ROUTE_PRESETS.some((r) => r.id === room.route.id)) {
+      lobbyRouteSel.value = room.route.id;
+    }
+
+    const listEl = document.getElementById('mp-player-list')!;
+    listEl.innerHTML = '';
+    for (const p of room.players) {
+      const row = document.createElement('div');
+      row.className = `mp-player-row ${p.id === this.mpPlayerId ? 'is-self' : ''}`;
+
+      const left = document.createElement('div');
+      left.className = 'mp-player-left';
+      const dot = document.createElement('span');
+      dot.className = 'mp-color-dot';
+      dot.style.background = p.color;
+
+      const textWrap = document.createElement('div');
+      const nameEl = document.createElement('strong');
+      nameEl.textContent = `${p.name}${p.id === room.hostId ? ' 👑' : ''}${p.id === this.mpPlayerId ? ' (আপনি)' : ''}`;
+      const busDef = BUS_SKINS.find((b) => b.id === p.busId) ?? BUS_SKINS[0];
+      const busEl = document.createElement('span');
+      busEl.className = 'mp-player-bus';
+      busEl.textContent = busDef.name;
+      textWrap.append(nameEl, busEl);
+      left.append(dot, textWrap);
+
+      const badge = document.createElement('span');
+      badge.className = `mp-ready-badge ${p.ready ? 'is-ready' : ''}`;
+      badge.textContent = p.ready ? '✅ রেডি' : '⏳ অপেক্ষা...';
+
+      row.append(left, badge);
+      listEl.appendChild(row);
+    }
+
+    const me = room.players.find((p) => p.id === this.mpPlayerId);
+    const readyBtn = document.getElementById('btn-mp-ready') as HTMLButtonElement;
+    readyBtn.textContent = me?.ready ? '⏳ আন-রেডি' : '✅ আমি রেডি!';
+
+    const startBtn = document.getElementById('btn-mp-start') as HTMLButtonElement;
+    startBtn.classList.toggle('hidden', !isHost);
+    const allReady = room.players.length >= 2 && room.players.every((p) => p.ready);
+    startBtn.disabled = room.players.length < 1;
+
+    document.getElementById('mp-lobby-status')!.textContent =
+      room.players.length < 2
+        ? 'লিংক কপি করে বন্ধুদের পাঠান (একাই টেস্ট করতে চাইলে হোস্ট এখনই শুরু করতে পারেন!)'
+        : allReady
+          ? 'সবাই রেডি! হোস্ট এখন রেস শুরু করতে পারেন!'
+          : 'সবাই ✅ রেডি হলে হোস্ট রেস শুরু করবে...';
+  }
+
+  private startMpLobbyPolling(): void {
+    this.stopMpPolling();
+    const poll = async () => {
+      if (!this.activeRoom || !this.mpPlayerId) return;
+      try {
+        const res = await fetchRaceRoom(this.activeRoom.code);
+        this.activeRoom = res.room;
+        this.mpServerOffsetMs = res.serverTime - performance.now();
+
+        if (res.room.status === 'countdown' || res.room.status === 'racing') {
+          this.stopMpPolling();
+          this.beginRaceCountdown(res.room, res.serverTime);
+          return;
+        }
+        if (this.mpDialog.open) {
+          this.renderLobbyRoom();
+        }
+      } catch {
+        // Ignore transient network errors while polling
+      }
+      this.mpPollTimer = window.setTimeout(() => void poll(), 950);
+    };
+    this.mpPollTimer = window.setTimeout(() => void poll(), 950);
+  }
+
+  private stopMpPolling(): void {
+    if (this.mpPollTimer) {
+      window.clearTimeout(this.mpPollTimer);
+      this.mpPollTimer = 0;
+    }
+  }
+
+  private beginRaceCountdown(room: RaceRoomState, serverTime: number): void {
+    this.stopMpPolling();
+    this.mpServerOffsetMs = serverTime - performance.now();
+    this.activeRoom = room;
+    this.mpMode = true;
+    this.mpRewardBanked = false;
+    this.mpCountdownActive = true;
+    this.mpCountdownLastTick = '';
+    this.isPlaying = false;
+    this.mpRaceRand = createSeededRandom(room.seed);
+    this.opponentInterp.clear();
+    this.opponentInterp.updateFromRoom(room, this.mpPlayerId!, performance.now());
+
+    if (this.mpDialog.open) this.mpDialog.close();
+    if (this.raceResultDialog.open) this.raceResultDialog.close();
+
+    this.audio.unlock();
+    this.clearActiveInputs();
+    this.world.resetEffects();
+    this.world.clearRemoteRacers();
+    this.createSimulationFromSave(room.route.startM);
+
+    const me = room.players.find((p) => p.id === this.mpPlayerId);
+    this.sim.startRace(room.route.startM, room.route.finishM, me?.laneIndex ?? 0);
+    this.world.setBusSkin(this.store.get().selectedSkin);
+    this.world.syncRemoteRacers(
+      this.sim,
+      this.opponentInterp.sample(0.016, performance.now()),
+      room.route.finishM
+    );
+
+    this.titleOverlay.classList.add('hidden');
+    this.driveControls.classList.remove('hidden');
+    this.minimapWidget.classList.remove('hidden');
+    this.raceHudStrip.classList.remove('hidden');
+    this.raceCountdownEl.classList.remove('hidden');
+    this.raceCountdownSubEl.textContent = `${room.route.label} • রেডি হন!`;
+    this.refreshHud();
+    this.refreshRaceHud(this.opponentInterp.sample(0.016, performance.now()));
+  }
+
+  private updateMpCountdown(now: number): void {
+    if (!this.activeRoom) return;
+    const estimatedServerNow = now + this.mpServerOffsetMs;
+    const remainMs = this.activeRoom.startAt - estimatedServerNow;
+    const label = remainMs > 2000 ? '3' : remainMs > 1000 ? '2' : remainMs > 0 ? '1' : 'GO!';
+
+    if (label !== this.mpCountdownLastTick) {
+      this.mpCountdownLastTick = label;
+      this.raceCountdownNumEl.textContent = label;
+      if (label === 'GO!') {
+        this.audio.playHydraulicHorn();
+      } else {
+        this.audio.playHelperDoorSlap();
+      }
+    }
+
+    if (remainMs <= -420) {
+      this.mpCountdownActive = false;
+      this.raceCountdownEl.classList.add('hidden');
+      this.isPlaying = true;
+      this.mpRaceStartedAt = now;
+      this.mpSyncAccum = 0.2;
+      this.showCallout(`🏁 রেস শুরু! গন্তব্য: ${this.activeRoom.route.label}`);
+    }
+  }
+
+  private async pushRaceSync(finished: boolean, finishMs?: number): Promise<void> {
+    if (!this.activeRoom || !this.mpPlayerId) return;
+    if (!finished && this.mpSyncInFlight) return;
+    this.mpSyncInFlight = true;
+    try {
+      const res = await syncRaceTelemetry(this.activeRoom.code, this.mpPlayerId, {
+        x: this.sim.playerX,
+        distanceM: this.sim.distanceM,
+        speed: this.sim.speed,
+        elevationY: this.sim.elevationY,
+        tiltAngle: this.sim.tiltAngle,
+        nitroActive: this.sim.nitroActive,
+        crashed: this.sim.raceSlowdownTimer > 0,
+        busId: this.store.get().selectedSkin,
+        score: this.sim.score,
+        finished,
+        finishMs,
+      });
+      this.activeRoom = res.room;
+      this.opponentInterp.updateFromRoom(res.room, this.mpPlayerId, performance.now());
+    } catch {
+      // Keep racing smoothly offline during hiccups
+    } finally {
+      this.mpSyncInFlight = false;
+    }
+  }
+
+  private refreshRaceHud(opponents: InterpolatedOpponent[]): void {
+    const room = this.activeRoom;
+    if (!room) return;
+    const startM = room.route.startM;
+    const finishM = room.route.finishM;
+    const span = Math.max(100, finishM - startM);
+
+    const racers = [
+      { id: this.mpPlayerId || 'self', dist: this.sim.distanceM, color: '#ffffff', isSelf: true },
+      ...opponents.map((o) => ({ id: o.id, dist: o.distanceM, color: o.color, isSelf: false })),
+    ];
+    racers.sort((a, b) => b.dist - a.dist);
+
+    const myRank = Math.max(1, racers.findIndex((r) => r.isSelf) + 1);
+    const rankEmoji = myRank === 1 ? '🥇' : myRank === 2 ? '🥈' : myRank === 3 ? '🥉' : '🚌';
+    document.getElementById('race-rank-badge')!.textContent = `${rankEmoji} #${myRank} / ${racers.length}`;
+    document.getElementById('race-route-badge')!.textContent = room.route.label;
+    const remainKm = Math.max(0, (finishM - this.sim.distanceM) / 100).toFixed(1);
+    document.getElementById('race-remain-badge')!.textContent = `বাকি ${remainKm} km`;
+
+    this.raceProgressBar.innerHTML = '';
+    for (const r of racers) {
+      const pct = Math.max(2, Math.min(98, ((r.dist - startM) / span) * 100));
+      const dot = document.createElement('span');
+      dot.className = `race-progress-dot ${r.isSelf ? 'is-self' : ''}`;
+      dot.style.left = `${pct}%`;
+      dot.style.background = r.color;
+      this.raceProgressBar.appendChild(dot);
+    }
+  }
+
+  private async onLocalRaceFinished(): Promise<void> {
+    if (!this.activeRoom || !this.mpPlayerId) return;
+    const finishMs = Math.max(500, Math.round(performance.now() - this.mpRaceStartedAt));
+    this.isPlaying = false;
+    this.clearActiveInputs();
+    await this.pushRaceSync(true, finishMs);
+
+    const standings = sortRaceStandings(this.activeRoom.players);
+    const myRank = Math.max(1, standings.findIndex((p) => p.id === this.mpPlayerId) + 1);
+
+    if (!this.mpRewardBanked) {
+      this.mpRewardBanked = true;
+      const prize = myRank === 1 ? 400 : myRank === 2 ? 250 : myRank === 3 ? 150 : 100;
+      const unbanked = Math.max(0, this.sim.takaEarned - this.bankedTakaInRun);
+      this.bankedTakaInRun += unbanked;
+      this.store.update((d) => {
+        d.taka += unbanked + prize;
+      });
+      this.refreshTitleStats();
+      document.getElementById('race-reward-banner')!.textContent =
+        `🏆 আপনি #${myRank} হয়েছেন! রেস পুরস্কার +৳${prize} + ট্রিপ ভাড়া ৳${unbanked} জমা হয়েছে!`;
+    }
+
+    this.renderRaceResultDialog();
+    if (!this.raceResultDialog.open) {
+      this.raceResultDialog.showModal();
+    }
+    this.startRaceResultPolling();
+  }
+
+  private renderRaceResultDialog(): void {
+    const room = this.activeRoom;
+    if (!room || !this.mpPlayerId) return;
+    const standings = sortRaceStandings(room.players);
+
+    renderRacePodiumCard(this.racePodiumCanvas, {
+      routeLabel: room.route.label,
+      roomCode: room.code,
+      localPlayerId: this.mpPlayerId,
+      standings: standings.map((p) => ({
+        id: p.id,
+        name: p.name,
+        color: p.color,
+        finishMs: p.finishMs,
+        distanceM: p.distanceM,
+        busName: (BUS_SKINS.find((b) => b.id === p.busId) ?? BUS_SKINS[0]).name,
+      })),
+    });
+
+    const listEl = document.getElementById('race-standings-list')!;
+    listEl.innerHTML = '';
+    standings.forEach((p, idx) => {
+      const row = document.createElement('div');
+      row.className = `mp-player-row ${p.id === this.mpPlayerId ? 'is-self' : ''}`;
+      const left = document.createElement('strong');
+      left.textContent = `${idx + 1}. ${p.name}${p.id === this.mpPlayerId ? ' (আপনি)' : ''}`;
+      const right = document.createElement('span');
+      right.textContent =
+        p.finishMs !== null ? `🏁 ${formatRaceTime(p.finishMs)}` : `🚌 ${toHighwayKm(p.distanceM)} km`;
+      row.append(left, right);
+      listEl.appendChild(row);
+    });
+
+    const rematchBtn = document.getElementById('btn-race-rematch') as HTMLButtonElement;
+    rematchBtn.textContent =
+      room.hostId === this.mpPlayerId ? '🔄 আরেক ম্যাচ দে! (Rematch)' : '⏳ হোস্টের রি-ম্যাচের অপেক্ষায়...';
+  }
+
+  private startRaceResultPolling(): void {
+    this.stopMpPolling();
+    const poll = async () => {
+      if (!this.activeRoom || !this.mpPlayerId || !this.raceResultDialog.open) return;
+      try {
+        const res = await fetchRaceRoom(this.activeRoom.code);
+        this.activeRoom = res.room;
+        if (res.room.status === 'lobby') {
+          this.stopMpPolling();
+          this.raceResultDialog.close();
+          this.world.clearRemoteRacers();
+          this.raceHudStrip.classList.add('hidden');
+          this.mpMode = false;
+          this.openMultiplayerDialog('mptab-create');
+          return;
+        }
+        this.renderRaceResultDialog();
+      } catch {
+        // Ignore transient poll hiccup
+      }
+      this.mpPollTimer = window.setTimeout(() => void poll(), 1200);
+    };
+    this.mpPollTimer = window.setTimeout(() => void poll(), 1200);
+  }
+
+  private async exitMultiplayerCleanly(): Promise<void> {
+    this.stopMpPolling();
+    if (this.activeRoom && this.mpPlayerId) {
+      await leaveRaceRoom(this.activeRoom.code, this.mpPlayerId);
+    }
+    this.activeRoom = null;
+    this.mpPlayerId = null;
+    this.mpMode = false;
+    this.mpCountdownActive = false;
+    this.isPlaying = false;
+    this.reopenMpAfterGarage = false;
+    this.opponentInterp.clear();
+    this.world.clearRemoteRacers();
+    this.clearActiveInputs();
+
+    if (this.mpDialog.open) this.mpDialog.close();
+    if (this.raceResultDialog.open) this.raceResultDialog.close();
+    this.raceCountdownEl.classList.add('hidden');
+    this.raceHudStrip.classList.add('hidden');
+    this.driveControls.classList.add('hidden');
+    this.minimapWidget.classList.add('hidden');
+    this.titleOverlay.classList.remove('hidden');
+    this.createSimulationFromSave(this.activeStartM);
+    this.refreshHud();
+  }
+}
 
 const app = new MurirTinApp();
 void app.init();

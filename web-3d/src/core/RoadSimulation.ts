@@ -72,12 +72,24 @@ export interface SimEvent {
     | 'train_passing'
     | 'hub_unlocked'
     | 'route_complete'
+    | 'race_finish'
     | 'gameover';
   callout: string;
   takaDelta: number;
   x?: number;
   z?: number;
   hubId?: string;
+}
+
+/** Deterministic Mulberry32 PRNG so friends share identical road traffic spawns. */
+export function createSeededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 export interface InputState {
@@ -134,6 +146,13 @@ export class RoadSimulation {
   public crashed = false;
   public hornCooldown = 0;
   public revivesUsed = 0;
+
+  // Friends Multiplayer Race State
+  public raceMode = false;
+  public raceStartM = 0;
+  public raceFinishM = 0;
+  public raceFinished = false;
+  public raceSlowdownTimer = 0;
 
   // Explore Bangladesh Route, Slope & Weather State
   public currentSegment: RouteSegment = BD_ROUTE_SEGMENTS[0];
@@ -194,6 +213,17 @@ export class RoadSimulation {
     return Math.round(this.speed * 3.1);
   }
 
+  public startRace(startM: number, finishM: number, laneIndex = 1): void {
+    this.reset(startM);
+    this.raceMode = true;
+    this.raceStartM = startM;
+    this.raceFinishM = finishM;
+    this.raceFinished = false;
+    this.raceSlowdownTimer = 0;
+    const clampedLane = Math.max(0, Math.min(3, laneIndex));
+    this.playerX = LANE_CENTERS[clampedLane];
+  }
+
   public reset(startDistanceM = 0): void {
     this.playerX = -1.5;
     this.playerVx = 0;
@@ -216,6 +246,11 @@ export class RoadSimulation {
     this.crashed = false;
     this.hornCooldown = 0;
     this.revivesUsed = 0;
+    this.raceMode = false;
+    this.raceStartM = 0;
+    this.raceFinishM = 0;
+    this.raceFinished = false;
+    this.raceSlowdownTimer = 0;
 
     this.totalTollPaid = 0;
     this.bridgesCrossed = 0;
@@ -394,6 +429,7 @@ export class RoadSimulation {
 
     this.invulnTimer = Math.max(0, this.invulnTimer - safeDt);
     this.hornCooldown = Math.max(0, this.hornCooldown - safeDt);
+    this.raceSlowdownTimer = Math.max(0, this.raceSlowdownTimer - safeDt);
 
     if (this.comboTimer > 0) {
       this.comboTimer = Math.max(0, this.comboTimer - safeDt);
@@ -419,9 +455,10 @@ export class RoadSimulation {
 
     // Forward Speed Dynamics + Slope & Bridge Feel
     const progressBonus = Math.min(20, this.distanceM * 0.0012);
+    const engineScale = this.raceMode ? 1.1 : 2.5;
     const baseCruise =
       25 +
-      (this.engineLevel - 1) * 2.5 +
+      (this.engineLevel - 1) * engineScale +
       this.busBonusSpeed +
       progressBonus +
       (this.isOnBridge || this.currentBiome === 'flyover' ? 2.8 : 0);
@@ -431,6 +468,9 @@ export class RoadSimulation {
     if (this.nitroActive) targetSpeed += 19 + (this.nitroLevel - 1) * 2;
     // Climbing uphill slightly loads the engine, descending gives gravity boost
     targetSpeed -= this.slopePitch * 22;
+    if (this.raceMode && this.raceSlowdownTimer > 0) {
+      targetSpeed = Math.min(targetSpeed, 13);
+    }
 
     this.speed += (targetSpeed - this.speed) * Math.min(1, safeDt * 5.5);
     const dz = this.speed * safeDt;
@@ -440,6 +480,16 @@ export class RoadSimulation {
     const wantedMult = 1 + this.wantedLevel * 0.35;
     const rainMult = this.rainIntensity > 0.3 ? 1.35 : 1;
     this.score += Math.floor(dz * 1.6 * feverMult * wantedMult * rainMult);
+
+    if (this.raceMode && !this.raceFinished && this.distanceM >= this.raceFinishM) {
+      this.raceFinished = true;
+      this.score += 1000;
+      events.push({
+        type: 'race_finish',
+        callout: '🏁 ফিনিশ লাইন পার! দারুণ ড্রাইভ ওস্তাদ!',
+        takaDelta: 0,
+      });
+    }
 
     // Route & Elevation Sample
     const prevLap = this.completedLaps;
@@ -622,7 +672,7 @@ export class RoadSimulation {
     }
 
     this.rivalTimer -= safeDt;
-    if (!this.rivalActive && this.rivalTimer <= 0 && !this.hasTollGateNear(-95)) {
+    if (!this.raceMode && !this.rivalActive && this.rivalTimer <= 0 && !this.hasTollGateNear(-95)) {
       this.rivalActive = true;
       this.rivalTimer = 18;
       const rivalLane = this.playerX < 0 ? 2 : 1;
@@ -754,30 +804,15 @@ export class RoadSimulation {
       this.takaEarned = 0;
       this.totalTollPaid += seized;
       if (this.invulnTimer <= 0) {
-        this.health -= 1;
-        this.invulnTimer = 1.4;
-        this.chapaniCombo = 0;
-        this.feverActive = false;
-        this.speed = Math.max(12, this.speed * 0.55);
-      }
-      if (this.health <= 0) {
-        this.health = 0;
-        this.crashed = true;
-        events.push({
-          type: 'gameover',
-          callout: `টোল (৳${fee}) না দিয়ে ব্যারিকেডে ধাক্কা! মুড়ির টিন শেষ 💥`,
-          takaDelta: -seized,
-          x: this.playerX,
-          z: 0,
-        });
-      } else {
-        events.push({
-          type: 'toll_fine',
-          callout: `🚧 ভাড়া কম (টোল ৳${fee})! ব্যারিকেডে ধাক্কা (-১ ❤️)`,
-          takaDelta: -seized,
-          x: this.playerX,
-          z: ent.z,
-        });
+        this.applyDamageOrGameOver(
+          events,
+          this.playerX,
+          ent.z,
+          'toll_fine',
+          `🚧 ভাড়া কম (টোল ৳${fee})! ব্যারিকেডে ধাক্কা (-১ ❤️)`,
+          `টোল (৳${fee}) না দিয়ে ব্যারিকেডে ধাক্কা! মুড়ির টিন শেষ 💥`,
+          -seized
+        );
       }
       return;
     }
@@ -895,6 +930,26 @@ export class RoadSimulation {
       return;
     }
 
+    this.applyDamageOrGameOver(
+      events,
+      ent.x,
+      ent.z,
+      'crash',
+      'রাস্তা কি তোর বাপের?! (-১ লাইফ)',
+      'মুড়ির টিন উল্টায়ে গেছে ওস্তাদ!! 💥',
+      0
+    );
+  }
+
+  private applyDamageOrGameOver(
+    events: SimEvent[],
+    hitX: number,
+    hitZ: number,
+    nonFatalType: 'crash' | 'toll_fine',
+    nonFatalCallout: string,
+    gameoverCallout: string,
+    takaDelta: number
+  ): void {
     this.health -= 1;
     this.invulnTimer = 1.35;
     this.chapaniCombo = 0;
@@ -902,22 +957,36 @@ export class RoadSimulation {
     this.speed = Math.max(12, this.speed * 0.55);
 
     if (this.health <= 0) {
+      if (this.raceMode) {
+        this.health = this.maxHealth;
+        this.raceSlowdownTimer = 2.2;
+        this.invulnTimer = 2.6;
+        this.speed = 9;
+        events.push({
+          type: 'crash',
+          callout: '💥 ধাক্কা! ২ সেকেন্ড স্পিড ডাউন — বন্ধু ওভারটেক করছে!',
+          takaDelta,
+          x: hitX,
+          z: hitZ,
+        });
+        return;
+      }
       this.health = 0;
       this.crashed = true;
       events.push({
         type: 'gameover',
-        callout: 'মুড়ির টিন উল্টায়ে গেছে ওস্তাদ!! 💥',
-        takaDelta: 0,
+        callout: gameoverCallout,
+        takaDelta,
         x: this.playerX,
         z: 0,
       });
     } else {
       events.push({
-        type: 'crash',
-        callout: 'রাস্তা কি তোর বাপের?! (-১ লাইফ)',
-        takaDelta: 0,
-        x: ent.x,
-        z: ent.z,
+        type: nonFatalType,
+        callout: nonFatalCallout,
+        takaDelta,
+        x: hitX,
+        z: hitZ,
       });
     }
   }

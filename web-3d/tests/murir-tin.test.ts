@@ -8,11 +8,20 @@ import {
   toHighwayKm,
 } from '../src/core/BangladeshRoute';
 import { BUS_SKINS, UPGRADES, getUpgradeCost } from '../src/core/GarageCatalog';
+import { OpponentInterpolator } from '../src/core/MultiplayerClient';
+import {
+  SPRINT_ROUTE_PRESETS,
+  buildCustomSprintRoute,
+  formatRaceTime,
+  sortRaceStandings,
+  type RaceRoomState,
+} from '../src/core/MultiplayerTypes';
 import {
   BRIDGE_END_M,
   BRIDGE_START_M,
   PADMA_TOLL_FEE,
   RoadSimulation,
+  createSeededRandom,
   getViralTitle,
 } from '../src/core/RoadSimulation';
 import { SaveStore } from '../src/core/SaveStore';
@@ -212,5 +221,100 @@ describe('Murir Tin 3D — Explore Bangladesh, Bridges, Slopes & Mechanics', () 
     const simRaj = new RoadSimulation(1, 1, 1, rajdhani!.bonusSpeed, rajdhani!.bonusArmor);
     expect(simRaj.maxHealth).toBe(4);
     expect(simRaj.speed).toBeGreaterThan(25);
+  });
+
+  it('supports multiplayer deterministic seed, sprint routes, crash slowdown, finish, and opponent interpolation', () => {
+    const rngA = createSeededRandom(987654);
+    const rngB = createSeededRandom(987654);
+    expect([rngA(), rngA(), rngA()]).toEqual([rngB(), rngB(), rngB()]);
+
+    for (const preset of SPRINT_ROUTE_PRESETS) {
+      expect(preset.startM).toBeGreaterThanOrEqual(0);
+      expect(preset.finishM).toBeGreaterThan(preset.startM);
+      expect(preset.finishM).toBeLessThanOrEqual(FULL_ROUTE_M);
+    }
+
+    const custom = buildCustomSprintRoute('bogura', 'sirajganj');
+    expect(custom).not.toBeNull();
+    expect(custom!.startM).toBe(11500);
+    expect(custom!.finishM).toBe(24500);
+    expect(buildCustomSprintRoute('dhaka', 'bogura')).toBeNull();
+
+    const sim = new RoadSimulation(1, 1, 1);
+    sim.startRace(14500, 19500, 2);
+    expect(sim.raceMode).toBe(true);
+    sim.entities = [];
+
+    for (let hit = 0; hit < 3; hit++) {
+      sim.invulnTimer = 0;
+      sim.spawnEntity('deshi_tesla', sim.playerX, -0.5, 0.7, 1.15, -15, 2);
+      sim.step(0.03, { steer: 0, accelerate: false, brake: false, nitro: false }, rngA);
+    }
+    expect(sim.crashed).toBe(false);
+    expect(sim.raceSlowdownTimer).toBeGreaterThan(0);
+
+    sim.distanceM = 19499.7;
+    const finishEvents = sim.step(0.05, { steer: 0, accelerate: true, brake: false, nitro: false }, rngA);
+    expect(sim.raceFinished).toBe(true);
+    expect(finishEvents.some((e) => e.type === 'race_finish')).toBe(true);
+
+    const room: RaceRoomState = {
+      code: 'ABC12',
+      hostId: 'p1',
+      route: SPRINT_ROUTE_PRESETS[0],
+      seed: 42,
+      status: 'racing',
+      startAt: 1000,
+      createdAt: 1000,
+      updatedAt: 1200,
+      players: [
+        {
+          id: 'p1',
+          name: 'Me',
+          busId: 'classic_mirpur',
+          color: '#06d6a0',
+          laneIndex: 0,
+          ready: true,
+          x: -4.5,
+          distanceM: 15000,
+          speed: 30,
+          elevationY: 0,
+          tiltAngle: 0,
+          nitroActive: false,
+          crashed: false,
+          finishedAt: null,
+          finishMs: null,
+          score: 500,
+          lastSeen: 1200,
+        },
+        {
+          id: 'p2',
+          name: 'Friend',
+          busId: 'rajdhani_express',
+          color: '#ffbe0b',
+          laneIndex: 1,
+          ready: true,
+          x: 1.5,
+          distanceM: 15020,
+          speed: 32,
+          elevationY: 0,
+          tiltAngle: -0.05,
+          nitroActive: true,
+          crashed: false,
+          finishedAt: null,
+          finishMs: null,
+          score: 620,
+          lastSeen: 1200,
+        },
+      ],
+    };
+    const interp = new OpponentInterpolator();
+    interp.updateFromRoom(room, 'p1', 1200);
+    const sampled = interp.sample(0.016, 1300);
+    expect(sampled).toHaveLength(1);
+    expect(sampled[0].busId).toBe('rajdhani_express');
+    expect(Number.isFinite(sampled[0].distanceM)).toBe(true);
+    expect(formatRaceTime(64500)).toBe('01:04.5');
+    expect(sortRaceStandings(room.players)[0].id).toBe('p2');
   });
 });

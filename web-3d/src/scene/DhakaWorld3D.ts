@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DHAKA_BILLBOARDS, type BillboardAd } from '../config/billboards';
 import { type BridgeStyle } from '../core/BangladeshRoute';
 import { BUS_SKINS } from '../core/GarageCatalog';
+import { type InterpolatedOpponent } from '../core/MultiplayerTypes';
 import { type RoadEntity, type RoadSimulation } from '../core/RoadSimulation';
 import { type CameraMode, type GraphicsPreset } from '../core/SaveStore';
 import { attachRajdhaniLivery, disposeLivery } from './BusLiveryBuilder';
@@ -54,6 +55,19 @@ export class DhakaWorld3D {
   private readonly rainGroup = new THREE.Group();
   private readonly trafficGroup = new THREE.Group();
   private readonly particlesGroup = new THREE.Group();
+  private readonly remoteRacersGroup = new THREE.Group();
+  private readonly finishArchGroup = new THREE.Group();
+
+  private readonly remoteRacerNodes = new Map<
+    string,
+    {
+      root: THREE.Group;
+      busGroup: THREE.Group;
+      busId: string;
+      nameSprite: THREE.Sprite;
+      flames: THREE.Group;
+    }
+  >();
 
   private readonly laneDashes: THREE.Mesh[] = [];
   private readonly railSleepers: THREE.Mesh[] = [];
@@ -137,12 +151,15 @@ export class DhakaWorld3D {
       this.railTrackGroup,
       this.trainGroup,
       this.trafficGroup,
+      this.remoteRacersGroup,
+      this.finishArchGroup,
       this.particlesGroup,
       this.playerGroup,
       this.rainGroup
     );
 
     this.buildRoadDeck();
+    this.buildFinishArch();
     this.buildNorthBengalBiome();
     this.buildDhakaCityBiome();
     this.buildHillsBiome();
@@ -295,18 +312,7 @@ export class DhakaWorld3D {
     this.playerGroup.add(bus);
 
     if (this.nitroFlames.children.length === 0) {
-      const flameMat = new THREE.MeshBasicMaterial({ color: '#00f5d4', transparent: true, opacity: 0.9 });
-      const innerMat = new THREE.MeshBasicMaterial({ color: '#ffbe0b' });
-      for (const fx of [-0.65, 0.65]) {
-        const outer = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.4, 10), flameMat);
-        outer.rotation.x = Math.PI / 2;
-        outer.position.set(fx, 0.58, 3.35);
-        const core = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.9, 8), innerMat);
-        core.rotation.x = Math.PI / 2;
-        core.position.set(fx, 0.58, 3.15);
-        this.nitroFlames.add(outer, core);
-      }
-      this.nitroFlames.visible = false;
+      this.nitroFlames = this.createNitroFlamesGroup();
       this.playerGroup.add(this.nitroFlames);
     }
 
@@ -1151,6 +1157,174 @@ export class DhakaWorld3D {
     this.camera.lookAt(sim.playerX * 0.45, 1.35 + sim.slopePitch * 12, -14);
 
     this.renderer.render(this.scene, this.camera);
+  }
+
+  private createNitroFlamesGroup(): THREE.Group {
+    const g = new THREE.Group();
+    const flameMat = new THREE.MeshBasicMaterial({ color: '#00f5d4', transparent: true, opacity: 0.9 });
+    const innerMat = new THREE.MeshBasicMaterial({ color: '#ffbe0b' });
+    for (const fx of [-0.65, 0.65]) {
+      const outer = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.4, 10), flameMat);
+      outer.rotation.x = Math.PI / 2;
+      outer.position.set(fx, 0.58, 3.35);
+      const core = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.9, 8), innerMat);
+      core.rotation.x = Math.PI / 2;
+      core.position.set(fx, 0.58, 3.15);
+      g.add(outer, core);
+    }
+    g.visible = false;
+    return g;
+  }
+
+  private buildFinishArch(): void {
+    const pillarMat = new THREE.MeshStandardMaterial({ color: '#ffbe0b', roughness: 0.45 });
+    const trimMat = new THREE.MeshStandardMaterial({ color: '#1b1f2a', roughness: 0.5 });
+    for (const sx of [-6.9, 6.9]) {
+      const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.65, 6.6, 0.65), pillarMat);
+      pillar.position.set(sx, 3.3, 0);
+      const base = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.6, 1.1), trimMat);
+      base.position.set(sx, 0.3, 0);
+      this.finishArchGroup.add(pillar, base);
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d')!;
+    const cell = 32;
+    for (let y = 0; y < 4; y++) {
+      for (let x = 0; x < 16; x++) {
+        ctx.fillStyle = (x + y) % 2 === 0 ? '#ffffff' : '#111827';
+        ctx.fillRect(x * cell, y * cell, cell, cell);
+      }
+    }
+    ctx.fillStyle = 'rgba(239, 71, 111, 0.92)';
+    ctx.fillRect(110, 22, 292, 84);
+    ctx.strokeStyle = '#ffbe0b';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(110, 22, 292, 84);
+    ctx.fillStyle = '#fffdf7';
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 42px "Hind Siliguri", "Segoe UI", sans-serif';
+    ctx.fillText('🏁 FINISH 🏁', 256, 78);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const banner = new THREE.Mesh(
+      new THREE.BoxGeometry(14.6, 2.2, 0.5),
+      new THREE.MeshBasicMaterial({ map: tex })
+    );
+    banner.position.set(0, 6.0, 0);
+    this.finishArchGroup.add(banner);
+    this.finishArchGroup.visible = false;
+  }
+
+  private createNameplateSprite(name: string, color: string): THREE.Sprite {
+    const canvas = document.createElement('canvas');
+    canvas.width = 320;
+    canvas.height = 76;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = 'rgba(15, 20, 32, 0.88)';
+    ctx.beginPath();
+    ctx.roundRect(10, 10, 300, 56, 28);
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(38, 38, 10, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#fffdf7';
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 26px "Hind Siliguri", "Segoe UI", sans-serif';
+    ctx.fillText(name.slice(0, 16), 58, 47, 236);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(3.8, 0.9, 1);
+    sprite.position.set(0, 3.65, 0);
+    return sprite;
+  }
+
+  public syncRemoteRacers(
+    sim: RoadSimulation,
+    opponents: InterpolatedOpponent[],
+    finishM: number | null
+  ): void {
+    const activeIds = new Set<string>();
+    for (const opp of opponents) {
+      activeIds.add(opp.id);
+      let node = this.remoteRacerNodes.get(opp.id);
+      if (!node) {
+        const root = new THREE.Group();
+        const busGroup = this.buildBusPreviewClone(opp.busId);
+        const nameSprite = this.createNameplateSprite(opp.name, opp.color);
+        const flames = this.createNitroFlamesGroup();
+        root.add(busGroup, nameSprite, flames);
+        this.remoteRacersGroup.add(root);
+        node = { root, busGroup, busId: opp.busId, nameSprite, flames };
+        this.remoteRacerNodes.set(opp.id, node);
+      } else if (node.busId !== opp.busId) {
+        disposeLivery(node.busGroup);
+        node.root.remove(node.busGroup);
+        const nextBus = this.buildBusPreviewClone(opp.busId);
+        node.root.add(nextBus);
+        node.busGroup = nextBus;
+        node.busId = opp.busId;
+      }
+
+      // Player sits at z = 0 looking towards -Z, so ahead opponents have negative relZ
+      const relZ = sim.distanceM - opp.distanceM;
+      const inRange = relZ > -185 && relZ < 32;
+      node.root.visible = inRange;
+      if (inRange) {
+        node.root.position.set(opp.x, 0, relZ);
+        node.root.rotation.z = opp.tiltAngle;
+        node.flames.visible = opp.nitroActive;
+        if (node.flames.visible) {
+          node.flames.scale.set(1, 1, 0.85 + Math.random() * 0.45);
+        }
+      }
+    }
+
+    for (const [id, node] of this.remoteRacerNodes.entries()) {
+      if (!activeIds.has(id)) {
+        disposeLivery(node.busGroup);
+        const spriteMat = node.nameSprite.material as THREE.SpriteMaterial;
+        spriteMat.map?.dispose();
+        spriteMat.dispose();
+        this.remoteRacersGroup.remove(node.root);
+        this.remoteRacerNodes.delete(id);
+      }
+    }
+
+    if (finishM !== null) {
+      const archZ = sim.distanceM - finishM;
+      const showArch = archZ > -185 && archZ < 28;
+      this.finishArchGroup.visible = showArch;
+      if (showArch) {
+        this.finishArchGroup.position.set(0, 0, archZ);
+      }
+    } else {
+      this.finishArchGroup.visible = false;
+    }
+  }
+
+  public clearRemoteRacers(): void {
+    for (const node of this.remoteRacerNodes.values()) {
+      disposeLivery(node.busGroup);
+      const spriteMat = node.nameSprite.material as THREE.SpriteMaterial;
+      spriteMat.map?.dispose();
+      spriteMat.dispose();
+      this.remoteRacersGroup.remove(node.root);
+    }
+    this.remoteRacerNodes.clear();
+    this.finishArchGroup.visible = false;
   }
 
   public resize(): void {

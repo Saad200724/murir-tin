@@ -1,9 +1,21 @@
 import { type RoadSimulation, ROAD_HALF_WIDTH } from '../core/RoadSimulation';
 
+export interface MiniMapRemoteRacer {
+  x: number;
+  z: number;
+  color: string;
+}
+
 /**
  * GTA V-style live tactical radar mini-map rendered on Canvas 2D.
  */
-export function renderMiniMap(canvas: HTMLCanvasElement, sim: RoadSimulation, nowMs: number): void {
+export function renderMiniMap(
+  canvas: HTMLCanvasElement,
+  sim: RoadSimulation,
+  nowMs: number,
+  remoteRacers: MiniMapRemoteRacer[] = [],
+  finishRelZ: number | null = null
+): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
@@ -95,6 +107,32 @@ export function renderMiniMap(canvas: HTMLCanvasElement, sim: RoadSimulation, no
       ctx.fillStyle = '#e2e8f0';
       ctx.fillRect(sx - 2.5, sy - 4, 5, 8);
     }
+  }
+
+  // Checkered Finish Line across radar when approaching finish
+  if (finishRelZ !== null) {
+    const fsy = toScreenY(finishRelZ);
+    if (fsy >= -8 && fsy <= h + 8) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(roadLeft, fsy - 3, roadW, 6);
+      ctx.fillStyle = '#1b1f2a';
+      for (let bx = 0; bx < 6; bx += 2) {
+        ctx.fillRect(roadLeft + bx * (roadW / 6), fsy - 3, roadW / 6, 6);
+      }
+    }
+  }
+
+  // Friend opponents on radar (colored beacons)
+  for (const r of remoteRacers) {
+    const ry = Math.max(7, Math.min(h - 7, toScreenY(r.z)));
+    const rx = toScreenX(r.x);
+    ctx.fillStyle = r.color;
+    ctx.strokeStyle = '#111827';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(rx, ry, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
   }
 
   // Player directional arrow (GTA style)
