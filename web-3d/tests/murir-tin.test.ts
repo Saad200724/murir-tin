@@ -8,6 +8,7 @@ import {
   toHighwayKm,
 } from '../src/core/BangladeshRoute';
 import { BUS_SKINS, UPGRADES, getUpgradeCost } from '../src/core/GarageCatalog';
+import { formatGamepadLabel, sampleGamepadSnapshot } from '../src/core/GamepadController';
 import { OpponentInterpolator } from '../src/core/MultiplayerClient';
 import {
   SPRINT_ROUTE_PRESETS,
@@ -316,5 +317,48 @@ describe('Murir Tin 3D — Explore Bangladesh, Bridges, Slopes & Mechanics', () 
     expect(Number.isFinite(sampled[0].distanceM)).toBe(true);
     expect(formatRaceTime(64500)).toBe('01:04.5');
     expect(sortRaceStandings(room.players)[0].id).toBe('p2');
+  });
+
+  it('samples gamepad deadzones, analog triggers, D-pad steering, and rising-edge actions cleanly', () => {
+    expect(formatGamepadLabel('Xbox 360 Controller (XInput STANDARD GAMEPAD)')).toBe('Xbox Controller');
+    expect(formatGamepadLabel('DualSense Wireless Controller (STANDARD GAMEPAD)')).toBe('PS5 DualSense');
+
+    const prev = Array(16).fill(false);
+    const driftSnap = sampleGamepadSnapshot([0.08], Array(16).fill(0), prev);
+    expect(driftSnap.state.steer).toBe(0);
+    expect(driftSnap.state.accelerate).toBe(false);
+
+    const buttons = Array(16).fill(0);
+    buttons[7] = 0.8; // RT accelerate
+    buttons[2] = 1; // X horn (rising)
+    buttons[9] = 1; // Start pause (rising)
+    const activeSnap = sampleGamepadSnapshot([-0.57], buttons, driftSnap.nextPressed);
+    expect(activeSnap.state.steer).toBeLessThan(-0.45);
+    expect(activeSnap.state.accelerate).toBe(true);
+    expect(activeSnap.state.hornPressed).toBe(true);
+    expect(activeSnap.state.pausePressed).toBe(true);
+
+    // Holding Start/X on the next frame must NOT re-trigger edge actions
+    const heldSnap = sampleGamepadSnapshot([-0.57], buttons, activeSnap.nextPressed);
+    expect(heldSnap.state.hornPressed).toBe(false);
+    expect(heldSnap.state.pausePressed).toBe(false);
+
+    // D-pad left overrides right analog stick
+    buttons[14] = 1;
+    const dpadSnap = sampleGamepadSnapshot([0.9], buttons, heldSnap.nextPressed);
+    expect(dpadSnap.state.steer).toBe(-1);
+
+    const mem = new Map<string, string>();
+    const store = new SaveStore({
+      getItem: (k) => mem.get(k) ?? null,
+      setItem: (k, v) => {
+        mem.set(k, v);
+      },
+    });
+    expect(store.get().gamepadVibration).toBe(true);
+    store.update((d) => {
+      d.gamepadVibration = false;
+    });
+    expect(new SaveStore({ getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) }).get().gamepadVibration).toBe(false);
   });
 });

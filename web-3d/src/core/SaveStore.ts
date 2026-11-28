@@ -31,6 +31,7 @@ export interface MurirTinSave {
   cameraMode: CameraMode;
   graphicsPreset: GraphicsPreset;
   showFps: boolean;
+  gamepadVibration: boolean;
   keymap: KeymapConfig;
 }
 
@@ -69,6 +70,7 @@ export function createDefaultSave(): MurirTinSave {
     cameraMode: 'chase',
     graphicsPreset: 'high',
     showFps: false,
+    gamepadVibration: true,
     keymap: createDefaultKeymap(),
   };
 }

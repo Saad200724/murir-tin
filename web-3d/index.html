@@ -52,6 +52,7 @@
               <span id="hud-combo" class="combo-badge hidden">x2</span>
               <span id="hud-wanted" class="wanted-badge hidden">⭐</span>
               <span id="hud-fps" class="fps-badge hidden">60 FPS</span>
+              <span id="hud-gamepad" class="gamepad-badge hidden" title="কন্ট্রোলার যুক্ত">🎮</span>
             </div>
             <div class="nitro-track" aria-label="Nitro charge">
               <div id="hud-nitro-fill" class="nitro-fill"></div>
@@ -191,7 +192,7 @@
               </button>
             </div>
           </div>
-          <p class="controls-tip"><strong>A/D</strong> চাপানো • <strong>Space</strong> হর্ন • <strong>Shift</strong> নাইট্রো • <strong>M</strong> ম্যাপ • <strong>ESC</strong> পজ মেনু</p>
+          <p class="controls-tip"><strong>A/D</strong> চাপানো • <strong>Space</strong> হর্ন • <strong>Shift</strong> নাইট্রো • <strong>M</strong> ম্যাপ • <strong>ESC</strong> পজ • 🎮 কন্ট্রোলার সাপোর্টেড</p>
         </div>
       </section>
 
@@ -251,6 +252,27 @@
           <p class="keymap-hint">যেকোনো বাটনে ক্লিক করে নতুন কীবোর্ড কী চাপুন (মোবাইলে অন-স্ক্রিন বাটন ও ড্র্যাগ কাজ করবে):</p>
           <div id="keymap-list" class="keymap-list"></div>
           <button id="btn-reset-keymap" type="button" class="btn-outline">↩️ ডিফল্ট কন্ট্রোল</button>
+
+          <div class="gamepad-card">
+            <div class="gamepad-card-head">
+              <strong>🎮 গেমপ্যাড / কন্ট্রোলার (Xbox / PS / Bluetooth)</strong>
+              <span id="gamepad-status-pill" class="gamepad-status">⚪ যুক্ত নেই — যেকোনো বাটন চাপুন</span>
+            </div>
+            <label class="toggle-row">
+              <span>📳 কন্ট্রোলার ভাইব্রেশন (Rumble)</span>
+              <input id="toggle-gamepad-vib" type="checkbox" checked />
+            </label>
+            <div class="gamepad-legend">
+              <div class="gp-chip"><span>Left Stick / D-Pad</span><strong>বামে / ডানে চাপানো</strong></div>
+              <div class="gp-chip"><span>RT / R2 / ▲</span><strong>গতি বাড়ানো</strong></div>
+              <div class="gp-chip"><span>LT / L2 / B / ○</span><strong>ব্রেক ধরা</strong></div>
+              <div class="gp-chip"><span>A / ✕ / RB / R1</span><strong>🔥 নাইট্রো টান</strong></div>
+              <div class="gp-chip"><span>X / □ / LB / L1</span><strong>📢 হাইড্রোলিক হর্ন</strong></div>
+              <div class="gp-chip"><span>Y / △</span><strong>📷 ক্যামেরা অ্যাঙ্গেল</strong></div>
+              <div class="gp-chip"><span>Select / Share</span><strong>🗺️ বাংলাদেশ ম্যাপ</strong></div>
+              <div class="gp-chip"><span>Start / Options</span><strong>⏸️ পজ / শুরু</strong></div>
+            </div>
+          </div>
         </div>
 
         <div id="panel-graphics" role="tabpanel" aria-labelledby="tab-graphics" class="pause-tabpanel" hidden>

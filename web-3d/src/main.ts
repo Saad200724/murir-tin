@@ -6,6 +6,7 @@ import {
   toHighwayKm,
 } from './core/BangladeshRoute';
 import { BUS_SKINS, UPGRADES, getUpgradeCost } from './core/GarageCatalog';
+import { GamepadController, type GamepadFrameState } from './core/GamepadController';
 import {
   fetchLeaderboard,
   submitLeaderboardScore,
@@ -123,6 +124,11 @@ class MurirTinApp {
   private dragLastX = 0;
   private dragSteerVelocity = 0;
 
+  private readonly gamepad = new GamepadController((connected, label) => {
+    this.onGamepadConnectionChange(connected, label);
+  });
+  private lastGamepadState: GamepadFrameState | null = null;
+
   // DOM Elements
   private readonly stageEl = document.getElementById('game-stage')!;
   private readonly screenFlashEl = document.getElementById('screen-flash')!;
@@ -146,6 +152,8 @@ class MurirTinApp {
   private readonly hudCombo = document.getElementById('hud-combo')!;
   private readonly hudWanted = document.getElementById('hud-wanted')!;
   private readonly hudFps = document.getElementById('hud-fps')!;
+  private readonly hudGamepad = document.getElementById('hud-gamepad')!;
+  private readonly gamepadStatusPill = document.getElementById('gamepad-status-pill')!;
   private readonly hudNitroFill = document.getElementById('hud-nitro-fill') as HTMLElement;
   private readonly hudMission = document.getElementById('hud-mission')!;
   private readonly hudChallenge = document.getElementById('hud-challenge')!;
@@ -422,6 +430,7 @@ class MurirTinApp {
     (document.getElementById('select-camera-mode') as HTMLSelectElement).value = s.cameraMode;
     (document.getElementById('select-graphics') as HTMLSelectElement).value = s.graphicsPreset;
     (document.getElementById('toggle-fps') as HTMLInputElement).checked = s.showFps;
+    (document.getElementById('toggle-gamepad-vib') as HTMLInputElement).checked = s.gamepadVibration;
     this.renderKeymapList();
   }
 
@@ -764,6 +773,16 @@ class MurirTinApp {
       this.applySavedVisualAudioSettings();
     });
 
+    document.getElementById('toggle-gamepad-vib')!.addEventListener('change', (e) => {
+      const val = (e.target as HTMLInputElement).checked;
+      this.store.update((d) => {
+        d.gamepadVibration = val;
+      });
+      if (val) {
+        this.gamepad.rumble('horn', true);
+      }
+    });
+
     document.getElementById('btn-reset-keymap')!.addEventListener('click', () => {
       this.waitingForRebind = null;
       this.store.update((d) => {
@@ -827,8 +846,90 @@ class MurirTinApp {
     });
   }
 
+  private onGamepadConnectionChange(connected: boolean, label: string): void {
+    this.hudGamepad.classList.toggle('hidden', !connected);
+    if (connected) {
+      this.hudGamepad.title = `${label} যুক্ত`;
+      this.gamepadStatusPill.textContent = `🟢 ${label} যুক্ত`;
+      this.gamepadStatusPill.classList.add('is-connected');
+      this.showCallout(`🎮 ${label} কানেক্ট হয়েছে! টান দেন ওস্তাদ!`);
+      this.gamepad.rumble('horn', this.store.get().gamepadVibration);
+    } else {
+      this.gamepadStatusPill.textContent = '⚪ যুক্ত নেই — যেকোনো বাটন চাপুন';
+      this.gamepadStatusPill.classList.remove('is-connected');
+      this.showCallout('🎮 কন্ট্রোলার ডিসকানেক্ট হয়েছে');
+    }
+  }
+
+  private cycleCameraMode(): void {
+    const order: CameraMode[] = ['chase', 'close', 'wide'];
+    const labels: Record<CameraMode, string> = {
+      chase: 'ক্লাসিক চেজ',
+      close: 'ক্লোজ অ্যাকশন',
+      wide: 'ওয়াইড হাইওয়ে',
+    };
+    const cur = this.store.get().cameraMode;
+    const next = order[(order.indexOf(cur) + 1) % order.length];
+    this.store.update((d) => {
+      d.cameraMode = next;
+    });
+    this.applySavedVisualAudioSettings();
+    this.showCallout(`📷 ক্যামেরা: ${labels[next]}`);
+  }
+
+  private handleGamepadEdgeActions(gp: GamepadFrameState): void {
+    if (!gp.connected || this.isTypingInInput()) return;
+
+    if (this.gameoverDialog.open) {
+      if (gp.confirmPressed) {
+        document.getElementById('btn-retry-now')?.click();
+      }
+      return;
+    }
+
+    if (this.pauseDialog.open) {
+      if (gp.pausePressed || gp.cancelPressed) {
+        this.pauseDialog.close();
+      } else if (gp.mapPressed) {
+        this.selectPauseTab('tab-map');
+      }
+      return;
+    }
+
+    if (this.garageDialog.open || this.leaderboardDialog.open || this.mpDialog.open) {
+      if (gp.cancelPressed) {
+        if (this.garageDialog.open) this.garageDialog.close();
+        else if (this.leaderboardDialog.open) this.leaderboardDialog.close();
+        else if (this.mpDialog.open) this.mpDialog.close();
+      }
+      return;
+    }
+
+    if (!this.isPlaying && !this.mpCountdownActive && !this.titleOverlay.classList.contains('hidden')) {
+      if (gp.confirmPressed) {
+        document.getElementById('btn-start-drive')?.click();
+      } else if (gp.mapPressed) {
+        this.openPauseMenu('tab-map');
+      }
+      return;
+    }
+
+    if (this.isPlaying && !this.sim.crashed && !this.modalPaused) {
+      if (gp.hornPressed) {
+        this.triggerHorn();
+      }
+      if (gp.cameraPressed) {
+        this.cycleCameraMode();
+      }
+      if (gp.pausePressed || gp.mapPressed) {
+        this.openPauseMenu('tab-map');
+      }
+    }
+  }
+
   private triggerHorn(): void {
     this.audio.playHydraulicHorn();
+    this.gamepad.rumble('horn', this.store.get().gamepadVibration);
     const events = this.sim.blastHorn();
     for (const ev of events) {
       this.showCallout(ev.callout);
@@ -838,7 +939,11 @@ class MurirTinApp {
 
   private readInput(dt: number): InputState {
     const km = this.store.get().keymap;
+    const gp = this.lastGamepadState;
     let steer = this.touchSteer;
+    if (gp?.connected && Math.abs(gp.steer) > 0.01 && steer === 0) {
+      steer = gp.steer;
+    }
     if (Math.abs(this.dragSteerVelocity) > 0.01) {
       steer = this.dragSteerVelocity;
       this.dragSteerVelocity *= Math.pow(0.004, dt);
@@ -846,9 +951,16 @@ class MurirTinApp {
     if (this.keys.has('ArrowLeft') || this.keys.has(km.left)) steer = -1;
     if (this.keys.has('ArrowRight') || this.keys.has(km.right)) steer = 1;
 
-    const accelerate = this.keys.has('ArrowUp') || this.keys.has(km.accelerate);
-    const brake = this.touchBrake || this.keys.has('ArrowDown') || this.keys.has(km.brake);
-    const nitro = this.touchNitro || this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') || this.keys.has(km.nitro);
+    const accelerate =
+      this.keys.has('ArrowUp') || this.keys.has(km.accelerate) || Boolean(gp?.accelerate);
+    const brake =
+      this.touchBrake || this.keys.has('ArrowDown') || this.keys.has(km.brake) || Boolean(gp?.brake);
+    const nitro =
+      this.touchNitro ||
+      this.keys.has('ShiftLeft') ||
+      this.keys.has('ShiftRight') ||
+      this.keys.has(km.nitro) ||
+      Boolean(gp?.nitro);
     return { steer, accelerate, brake, nitro };
   }
 
@@ -857,6 +969,10 @@ class MurirTinApp {
     const tick = (now: number) => {
       requestAnimationFrame(tick);
       if (this.isPaused) return;
+
+      const gp = this.gamepad.poll();
+      this.lastGamepadState = gp;
+      this.handleGamepadEdgeActions(gp);
 
       const dt = Math.min(0.05, Math.max(0.001, (now - this.lastTime) / 1000));
       this.lastTime = now;
@@ -954,13 +1070,16 @@ class MurirTinApp {
 
   private handleSimEvent(ev: ReturnType<RoadSimulation['step']>[number]): void {
     this.showCallout(ev.callout);
+    const vib = this.store.get().gamepadVibration;
 
     if (ev.type === 'chapani' || ev.type === 'tesla_dodge' || ev.type === 'pit_smash') {
       this.audio.playChapaniSparks(this.sim.chapaniCombo);
+      this.gamepad.rumble('chapani', vib);
       this.world.triggerSparkBurst(ev.x ?? this.sim.playerX, ev.z ?? 0, '#ffbe0b');
       this.spawnFloatPop(`+৳${ev.takaDelta}`, 'pop-gold');
     } else if (ev.type === 'fever_mode' || ev.type === 'mission_complete' || ev.type === 'wanted_cleared' || ev.type === 'route_complete') {
       this.audio.playMilestoneFanfare();
+      this.gamepad.rumble('bridge', vib);
       this.triggerFlash('flash-fever');
       this.spawnFloatPop(ev.type === 'mission_complete' ? '🎯 মিশন ডান!' : '🔥 বোনাস!', 'pop-gold');
     } else if (ev.type === 'passenger_pickup' || ev.type === 'rival_win') {
@@ -975,6 +1094,7 @@ class MurirTinApp {
     } else if (ev.type === 'toll_smash') {
       this.audio.playBarrierSmash();
       this.audio.playPoliceSiren();
+      this.gamepad.rumble('crash', vib);
       this.world.triggerSparkBurst(this.sim.playerX, 0, '#00f5d4');
       this.world.triggerMinorShake();
       this.spawnFloatPop('🔥 ব্যারিকেড উড়াল!', 'pop-gold');
@@ -992,21 +1112,25 @@ class MurirTinApp {
       this.audio.playMilestoneFanfare();
     } else if (ev.type === 'bridge_complete') {
       this.audio.playMilestoneFanfare();
+      this.gamepad.rumble('bridge', vib);
       this.triggerFlash('flash-fever');
       this.spawnFloatPop('🌉 সেতু পার +৳300!', 'pop-green');
     } else if (ev.type === 'toll_fine' || ev.type === 'crash') {
       this.audio.playCrash();
+      this.gamepad.rumble('crash', vib);
       this.triggerFlash('flash-crash');
       this.world.triggerMinorShake();
       this.world.triggerSparkBurst(this.sim.playerX, 0, '#ef476f');
       this.spawnFloatPop('💥 -১ লাইফ', 'pop-crimson');
     } else if (ev.type === 'race_finish') {
       this.audio.playMilestoneFanfare();
+      this.gamepad.rumble('bridge', vib);
       this.triggerFlash('flash-fever');
       this.spawnFloatPop('🏁 FINISH!', 'pop-gold');
       void this.onLocalRaceFinished();
     } else if (ev.type === 'gameover') {
       this.audio.playCrash();
+      this.gamepad.rumble('crash', vib);
       this.triggerFlash('flash-crash');
       this.world.triggerCrashBurst();
       this.onGameOver();
