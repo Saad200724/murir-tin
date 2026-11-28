@@ -112,8 +112,14 @@ class MurirTinApp {
   private mpPollTimer = 0;
   private mpSyncInFlight = false;
   private mpSyncAccum = 0;
+  private mpSyncSeq = 0;
+  private mpLastAppliedSeq = 0;
+  private mpLastRttMs = 120;
+  private mpGoBannerHideAt = 0;
   private mpRewardBanked = false;
   private reopenMpAfterGarage = false;
+  private lastRenderedHealth = -1;
+  private readonly raceProgressDots = new Map<string, HTMLSpanElement>();
   private readonly opponentInterp = new OpponentInterpolator();
 
   private readonly keys = new Set<string>();
@@ -995,6 +1001,11 @@ class MurirTinApp {
         return;
       }
 
+      if (this.mpGoBannerHideAt > 0 && now >= this.mpGoBannerHideAt) {
+        this.mpGoBannerHideAt = 0;
+        this.raceCountdownEl.classList.add('hidden');
+      }
+
       if (this.isPlaying && !this.sim.crashed && !this.modalPaused) {
         const input = this.readInput(dt);
         const rng = this.mpMode ? this.mpRaceRand : Math.random;
@@ -1490,7 +1501,10 @@ class MurirTinApp {
     this.hudPax.textContent = String(this.sim.passengers);
 
     const hp = Math.max(0, this.sim.health);
-    this.hudHealth.innerHTML = hp > 0 ? GEAR_LIFE_SVG.repeat(hp) : '💥';
+    if (hp !== this.lastRenderedHealth) {
+      this.lastRenderedHealth = hp;
+      this.hudHealth.innerHTML = hp > 0 ? GEAR_LIFE_SVG.repeat(hp) : '💥';
+    }
 
     this.hudStopLabel.textContent = `📍 ${this.sim.getCurrentStopName()} ➔ ${this.sim.getNextStopName()}`;
     this.hudKm.textContent = `${toHighwayKm(this.sim.distanceM)} / 840 km`;
@@ -1653,7 +1667,7 @@ class MurirTinApp {
         const res = await createRaceRoom(name || 'হোস্ট ওস্তাদ', this.store.get().selectedSkin, route);
         this.activeRoom = res.room;
         this.mpPlayerId = res.playerId ?? res.room.hostId;
-        this.mpServerOffsetMs = res.serverTime - performance.now();
+        this.updateServerClockOffset(res.serverTime, res.rttMs);
         errEl.textContent = '';
         this.enterLobbyView();
       } catch (err) {
@@ -1674,7 +1688,7 @@ class MurirTinApp {
         const res = await joinRaceRoom(code, name || 'বন্ধু ওস্তাদ', this.store.get().selectedSkin);
         this.activeRoom = res.room;
         this.mpPlayerId = res.playerId ?? null;
-        this.mpServerOffsetMs = res.serverTime - performance.now();
+        this.updateServerClockOffset(res.serverTime, res.rttMs);
         errEl.textContent = '';
         this.enterLobbyView();
       } catch (err) {
@@ -1722,7 +1736,7 @@ class MurirTinApp {
       try {
         const res = await startRaceRoom(this.activeRoom.code, this.mpPlayerId);
         this.activeRoom = res.room;
-        this.mpServerOffsetMs = res.serverTime - performance.now();
+        this.updateServerClockOffset(res.serverTime, res.rttMs);
         this.beginRaceCountdown(res.room, res.serverTime);
       } catch (err) {
         document.getElementById('mp-lobby-status')!.textContent =
@@ -1867,7 +1881,7 @@ class MurirTinApp {
       try {
         const res = await fetchRaceRoom(this.activeRoom.code);
         this.activeRoom = res.room;
-        this.mpServerOffsetMs = res.serverTime - performance.now();
+        this.updateServerClockOffset(res.serverTime, res.rttMs);
 
         if (res.room.status === 'countdown' || res.room.status === 'racing') {
           this.stopMpPolling();
@@ -1892,18 +1906,41 @@ class MurirTinApp {
     }
   }
 
+  private updateServerClockOffset(serverTime: number, rttMs?: number): void {
+    if (typeof rttMs === 'number' && Number.isFinite(rttMs)) {
+      this.mpLastRttMs = Math.max(1, Math.round(rttMs));
+    }
+    this.mpServerOffsetMs = serverTime + this.mpLastRttMs / 2 - performance.now();
+
+    const pingEl = document.getElementById('race-ping-badge');
+    if (pingEl) {
+      pingEl.textContent = `📶 ${this.mpLastRttMs}ms`;
+      pingEl.classList.toggle('is-warn', this.mpLastRttMs >= 180 && this.mpLastRttMs < 380);
+      pingEl.classList.toggle('is-bad', this.mpLastRttMs >= 380);
+    }
+  }
+
+  private clearRaceProgressDots(): void {
+    this.raceProgressDots.clear();
+    this.raceProgressBar.innerHTML = '';
+  }
+
   private beginRaceCountdown(room: RaceRoomState, serverTime: number): void {
     this.stopMpPolling();
-    this.mpServerOffsetMs = serverTime - performance.now();
+    this.updateServerClockOffset(serverTime, this.mpLastRttMs);
     this.activeRoom = room;
     this.mpMode = true;
     this.mpRewardBanked = false;
     this.mpCountdownActive = true;
     this.mpCountdownLastTick = '';
+    this.mpGoBannerHideAt = 0;
+    this.mpSyncSeq = 0;
+    this.mpLastAppliedSeq = 0;
     this.isPlaying = false;
+    this.clearRaceProgressDots();
     this.mpRaceRand = createSeededRandom(room.seed);
     this.opponentInterp.clear();
-    this.opponentInterp.updateFromRoom(room, this.mpPlayerId!, performance.now());
+    this.opponentInterp.updateFromRoom(room, this.mpPlayerId!, performance.now(), this.mpLastRttMs);
 
     if (this.mpDialog.open) this.mpDialog.close();
     if (this.raceResultDialog.open) this.raceResultDialog.close();
@@ -1949,9 +1986,9 @@ class MurirTinApp {
       }
     }
 
-    if (remainMs <= -420) {
+    if (remainMs <= 0) {
       this.mpCountdownActive = false;
-      this.raceCountdownEl.classList.add('hidden');
+      this.mpGoBannerHideAt = now + 450;
       this.isPlaying = true;
       this.mpRaceStartedAt = now;
       this.mpSyncAccum = 0.2;
@@ -1959,10 +1996,11 @@ class MurirTinApp {
     }
   }
 
-  private async pushRaceSync(finished: boolean, finishMs?: number): Promise<void> {
-    if (!this.activeRoom || !this.mpPlayerId) return;
-    if (!finished && this.mpSyncInFlight) return;
+  private async pushRaceSync(finished: boolean, finishMs?: number): Promise<boolean> {
+    if (!this.activeRoom || !this.mpPlayerId) return false;
+    if (!finished && this.mpSyncInFlight) return false;
     this.mpSyncInFlight = true;
+    const seq = ++this.mpSyncSeq;
     try {
       const res = await syncRaceTelemetry(this.activeRoom.code, this.mpPlayerId, {
         x: this.sim.playerX,
@@ -1977,10 +2015,15 @@ class MurirTinApp {
         finished,
         finishMs,
       });
-      this.activeRoom = res.room;
-      this.opponentInterp.updateFromRoom(res.room, this.mpPlayerId, performance.now());
+      if (seq >= this.mpLastAppliedSeq || finished) {
+        this.mpLastAppliedSeq = seq;
+        this.activeRoom = res.room;
+        this.updateServerClockOffset(res.serverTime, res.rttMs);
+        this.opponentInterp.updateFromRoom(res.room, this.mpPlayerId, performance.now(), this.mpLastRttMs);
+      }
+      return true;
     } catch {
-      // Keep racing smoothly offline during hiccups
+      return false;
     } finally {
       this.mpSyncInFlight = false;
     }
@@ -2006,14 +2049,26 @@ class MurirTinApp {
     const remainKm = Math.max(0, (finishM - this.sim.distanceM) / 100).toFixed(1);
     document.getElementById('race-remain-badge')!.textContent = `বাকি ${remainKm} km`;
 
-    this.raceProgressBar.innerHTML = '';
+    // Reuse cached progress dots instead of rebuilding DOM nodes at 60fps
+    const seen = new Set<string>();
     for (const r of racers) {
+      seen.add(r.id);
+      let dot = this.raceProgressDots.get(r.id);
+      if (!dot) {
+        dot = document.createElement('span');
+        dot.className = `race-progress-dot ${r.isSelf ? 'is-self' : ''}`;
+        dot.style.background = r.color;
+        this.raceProgressBar.appendChild(dot);
+        this.raceProgressDots.set(r.id, dot);
+      }
       const pct = Math.max(2, Math.min(98, ((r.dist - startM) / span) * 100));
-      const dot = document.createElement('span');
-      dot.className = `race-progress-dot ${r.isSelf ? 'is-self' : ''}`;
       dot.style.left = `${pct}%`;
-      dot.style.background = r.color;
-      this.raceProgressBar.appendChild(dot);
+    }
+    for (const [id, dot] of this.raceProgressDots.entries()) {
+      if (!seen.has(id)) {
+        dot.remove();
+        this.raceProgressDots.delete(id);
+      }
     }
   }
 
@@ -2022,7 +2077,11 @@ class MurirTinApp {
     const finishMs = Math.max(500, Math.round(performance.now() - this.mpRaceStartedAt));
     this.isPlaying = false;
     this.clearActiveInputs();
-    await this.pushRaceSync(true, finishMs);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const ok = await this.pushRaceSync(true, finishMs);
+      if (ok) break;
+      await new Promise((r) => window.setTimeout(r, 300));
+    }
 
     const standings = sortRaceStandings(this.activeRoom.players);
     const myRank = Math.max(1, standings.findIndex((p) => p.id === this.mpPlayerId) + 1);
@@ -2119,8 +2178,10 @@ class MurirTinApp {
     this.mpPlayerId = null;
     this.mpMode = false;
     this.mpCountdownActive = false;
+    this.mpGoBannerHideAt = 0;
     this.isPlaying = false;
     this.reopenMpAfterGarage = false;
+    this.clearRaceProgressDots();
     this.opponentInterp.clear();
     this.world.clearRemoteRacers();
     this.clearActiveInputs();

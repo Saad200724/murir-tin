@@ -506,12 +506,14 @@ export async function POST(request: Request): Promise<Response> {
       player.lastSeen = now;
 
       let metaChanged = false;
-      if (body.finished && player.finishedAt === null) {
+      const reachedFinish = Boolean(body.finished) || player.distanceM >= room.route.finishM;
+      if (reachedFinish && player.finishedAt === null) {
         player.finishedAt = now;
-        const rawMs = typeof body.finishMs === 'number' ? body.finishMs : now - room.startAt;
-        player.finishMs = Math.max(250, Math.round(rawMs));
+        player.finishMs = Math.max(250, Math.round(now - room.startAt));
         player.distanceM = Math.max(player.distanceM, room.route.finishM);
         metaChanged = true;
+      } else if (player.finishedAt !== null) {
+        player.distanceM = Math.max(player.distanceM, room.route.finishM);
       }
 
       if (advanceRaceLifecycle(room, now)) {

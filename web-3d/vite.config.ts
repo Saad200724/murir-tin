@@ -356,9 +356,12 @@ function localRaceDevPlugin(): Plugin {
                 player.score = Math.round(Number(body.score) || 0);
                 if (typeof body.busId === 'string') player.busId = cleanStr(body.busId, 32, player.busId);
                 player.lastSeen = now;
-                if (body.finished && player.finishedAt === null) {
+                const reachedFinish = Boolean(body.finished) || player.distanceM >= room.route.finishM;
+                if (reachedFinish && player.finishedAt === null) {
                   player.finishedAt = now;
-                  player.finishMs = Math.max(250, Math.round(Number(body.finishMs) || now - room.startAt));
+                  player.finishMs = Math.max(250, Math.round(now - room.startAt));
+                  player.distanceM = Math.max(player.distanceM, room.route.finishM);
+                } else if (player.finishedAt !== null) {
                   player.distanceM = Math.max(player.distanceM, room.route.finishM);
                 }
                 advanceRoom(room, now);

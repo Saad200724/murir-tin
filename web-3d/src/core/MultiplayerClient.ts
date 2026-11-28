@@ -12,20 +12,38 @@ export interface RaceApiResponse {
   room: RaceRoomState;
   serverTime: number;
   storage?: string;
+  rttMs?: number;
+}
+
+const REQUEST_TIMEOUT_MS = 4500;
+
+async function fetchRaceJson(
+  url: string,
+  init: RequestInit
+): Promise<RaceApiResponse> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const t0 = performance.now();
+  try {
+    const res = await fetch(url, { ...init, signal: controller.signal });
+    const data = (await res.json()) as RaceApiResponse & { error?: string };
+    if (!res.ok) {
+      throw new Error(data.error || `HTTP ${res.status}`);
+    }
+    data.rttMs = Math.max(1, Math.round(performance.now() - t0));
+    return data;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 async function postRaceApi(payload: Record<string, unknown>): Promise<RaceApiResponse> {
-  const res = await fetch('./api/race', {
+  return fetchRaceJson('./api/race', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     cache: 'no-store',
     body: JSON.stringify(payload),
   });
-  const data = (await res.json()) as RaceApiResponse & { error?: string };
-  if (!res.ok) {
-    throw new Error(data.error || `HTTP ${res.status}`);
-  }
-  return data;
 }
 
 export async function createRaceRoom(
@@ -45,15 +63,10 @@ export async function joinRaceRoom(
 }
 
 export async function fetchRaceRoom(code: string): Promise<RaceApiResponse> {
-  const res = await fetch(`./api/race?code=${encodeURIComponent(code.trim().toUpperCase())}`, {
+  return fetchRaceJson(`./api/race?code=${encodeURIComponent(code.trim().toUpperCase())}`, {
     method: 'GET',
     cache: 'no-store',
   });
-  const data = (await res.json()) as RaceApiResponse & { error?: string };
-  if (!res.ok) {
-    throw new Error(data.error || `HTTP ${res.status}`);
-  }
-  return data;
 }
 
 export async function setRaceReady(
@@ -126,21 +139,31 @@ export function buildRoomInviteUrl(code: string): string {
 interface SnapshotTrack {
   latest: RacePlayerState;
   receivedAtMs: number;
+  rttHalfSec: number;
   curX: number;
   curDist: number;
+  curSpeed: number;
   curTilt: number;
 }
 
-/** Smoothly dead-reckons & interpolates 250ms network snapshots to 60fps for 3D opponent buses. */
+/**
+ * Smoothly dead-reckons & interpolates network snapshots at 60fps so opponents never freeze
+ * or rubber-band even on 200-450ms mobile latency.
+ */
 export class OpponentInterpolator {
   private readonly tracks = new Map<string, SnapshotTrack>();
+  private finishM: number | null = null;
 
   public clear(): void {
     this.tracks.clear();
+    this.finishM = null;
   }
 
-  public updateFromRoom(room: RaceRoomState, localPlayerId: string, nowMs: number): void {
+  public updateFromRoom(room: RaceRoomState, localPlayerId: string, nowMs: number, rttMs = 120): void {
+    this.finishM = room.route.finishM;
+    const rttHalfSec = Math.min(0.45, Math.max(0, rttMs / 2000));
     const seen = new Set<string>();
+
     for (const p of room.players) {
       if (p.id === localPlayerId) continue;
       seen.add(p.id);
@@ -148,12 +171,15 @@ export class OpponentInterpolator {
       if (existing) {
         existing.latest = p;
         existing.receivedAtMs = nowMs;
+        existing.rttHalfSec = rttHalfSec;
       } else {
         this.tracks.set(p.id, {
           latest: p,
           receivedAtMs: nowMs,
+          rttHalfSec,
           curX: p.x,
           curDist: p.distanceM,
+          curSpeed: p.speed,
           curTilt: p.tiltAngle,
         });
       }
@@ -167,18 +193,35 @@ export class OpponentInterpolator {
 
   public sample(dt: number, nowMs: number): InterpolatedOpponent[] {
     const out: InterpolatedOpponent[] = [];
-    const safeDt = Math.min(0.1, Math.max(0.001, dt));
-    const blend = Math.min(1, safeDt * 12);
+    const safeDt = Math.min(0.08, Math.max(0.001, dt));
+    const speedAlpha = 1 - Math.exp(-8 * safeDt);
+    const distAlpha = 1 - Math.exp(-5.5 * safeDt);
+    const xAlpha = 1 - Math.exp(-9 * safeDt);
+    const tiltAlpha = 1 - Math.exp(-10 * safeDt);
 
     for (const tr of this.tracks.values()) {
       const p = tr.latest;
       const finished = p.finishedAt !== null;
-      const ageSec = finished ? 0 : Math.min(0.35, Math.max(0, (nowMs - tr.receivedAtMs) / 1000));
-      const targetDist = p.distanceM + p.speed * ageSec;
 
-      tr.curX += (p.x - tr.curX) * blend;
-      tr.curDist += (targetDist - tr.curDist) * blend;
-      tr.curTilt += (p.tiltAngle - tr.curTilt) * blend;
+      tr.curSpeed += ((finished ? 0 : p.speed) - tr.curSpeed) * speedAlpha;
+      if (!finished) {
+        tr.curDist += tr.curSpeed * safeDt;
+      }
+
+      const ageSec = finished ? 0 : Math.min(1.4, Math.max(0, (nowMs - tr.receivedAtMs) / 1000));
+      let targetDist = finished ? p.distanceM : p.distanceM + p.speed * (ageSec + tr.rttHalfSec);
+      if (this.finishM !== null) {
+        targetDist = Math.min(this.finishM, targetDist);
+      }
+
+      if (Math.abs(targetDist - tr.curDist) > 45) {
+        tr.curDist = targetDist;
+      } else {
+        tr.curDist += (targetDist - tr.curDist) * distAlpha;
+      }
+
+      tr.curX += (p.x - tr.curX) * xAlpha;
+      tr.curTilt += (p.tiltAngle - tr.curTilt) * tiltAlpha;
 
       out.push({
         id: p.id,
@@ -187,7 +230,7 @@ export class OpponentInterpolator {
         color: p.color,
         x: tr.curX,
         distanceM: tr.curDist,
-        speed: p.speed,
+        speed: tr.curSpeed,
         tiltAngle: tr.curTilt,
         nitroActive: p.nitroActive,
         finished,

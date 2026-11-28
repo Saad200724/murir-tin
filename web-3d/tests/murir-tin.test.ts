@@ -310,11 +310,16 @@ describe('Murir Tin 3D — Explore Bangladesh, Bridges, Slopes & Mechanics', () 
       ],
     };
     const interp = new OpponentInterpolator();
-    interp.updateFromRoom(room, 'p1', 1200);
-    const sampled = interp.sample(0.016, 1300);
-    expect(sampled).toHaveLength(1);
-    expect(sampled[0].busId).toBe('rajdhani_express');
-    expect(Number.isFinite(sampled[0].distanceM)).toBe(true);
+    interp.updateFromRoom(room, 'p1', 1200, 240);
+    const s1 = interp.sample(0.05, 1250);
+    const s2 = interp.sample(0.05, 1650);
+    const s3 = interp.sample(0.05, 1850);
+    expect(s1).toHaveLength(1);
+    expect(s1[0].busId).toBe('rajdhani_express');
+    expect(Number.isFinite(s1[0].distanceM)).toBe(true);
+    // Continues smoothly dead-reckoning past 350ms without freezing
+    expect(s2[0].distanceM).toBeGreaterThan(s1[0].distanceM);
+    expect(s3[0].distanceM).toBeGreaterThan(s2[0].distanceM);
     expect(formatRaceTime(64500)).toBe('01:04.5');
     expect(sortRaceStandings(room.players)[0].id).toBe('p2');
   });
