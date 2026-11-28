@@ -12,6 +12,7 @@ export interface RaceApiResponse {
   room: RaceRoomState;
   serverTime: number;
   storage?: string;
+  region?: string;
   rttMs?: number;
 }
 
@@ -138,7 +139,9 @@ export function buildRoomInviteUrl(code: string): string {
 
 interface SnapshotTrack {
   latest: RacePlayerState;
+  lastSeen: number;
   receivedAtMs: number;
+  serverStaleSec: number;
   rttHalfSec: number;
   curX: number;
   curDist: number;
@@ -147,8 +150,8 @@ interface SnapshotTrack {
 }
 
 /**
- * Smoothly dead-reckons & interpolates network snapshots at 60fps so opponents never freeze
- * or rubber-band even on 200-450ms mobile latency.
+ * Smoothly dead-reckons & interpolates network snapshots at 60fps so opponents never freeze,
+ * snap backwards on duplicate snapshots, or rubber-band on mobile latency.
  */
 export class OpponentInterpolator {
   private readonly tracks = new Map<string, SnapshotTrack>();
@@ -159,26 +162,66 @@ export class OpponentInterpolator {
     this.finishM = null;
   }
 
-  public updateFromRoom(room: RaceRoomState, localPlayerId: string, nowMs: number, rttMs = 120): void {
+  public updateFromRoom(
+    room: RaceRoomState,
+    localPlayerId: string,
+    nowMs: number,
+    rttMs = 120,
+    serverTime?: number
+  ): void {
     this.finishM = room.route.finishM;
+    const refServerTime =
+      typeof serverTime === 'number' && Number.isFinite(serverTime) ? serverTime : room.updatedAt;
     const rttHalfSec = Math.min(0.45, Math.max(0, rttMs / 2000));
     const seen = new Set<string>();
 
     for (const p of room.players) {
       if (p.id === localPlayerId) continue;
       seen.add(p.id);
+      const finished = p.finishedAt !== null;
+      const serverStaleSec = finished
+        ? 0
+        : Math.min(0.45, Math.max(0, (refServerTime - p.lastSeen) / 1000));
       const existing = this.tracks.get(p.id);
       if (existing) {
-        existing.latest = p;
-        existing.receivedAtMs = nowMs;
+        const isFresh =
+          p.lastSeen > existing.lastSeen ||
+          p.distanceM !== existing.latest.distanceM ||
+          p.finishedAt !== existing.latest.finishedAt ||
+          p.x !== existing.latest.x;
         existing.rttHalfSec = rttHalfSec;
+        if (isFresh) {
+          existing.latest = p;
+          existing.lastSeen = p.lastSeen;
+          existing.receivedAtMs = nowMs;
+          existing.serverStaleSec = serverStaleSec;
+        } else {
+          // Preserve receivedAtMs/serverStaleSec when the server echoes the same snapshot so
+          // dead-reckoning keeps advancing cleanly instead of snapping backwards.
+          existing.latest = {
+            ...existing.latest,
+            name: p.name,
+            busId: p.busId,
+            color: p.color,
+            nitroActive: p.nitroActive,
+            crashed: p.crashed,
+          };
+        }
       } else {
+        let initialDist = finished
+          ? p.distanceM
+          : p.distanceM + p.speed * (serverStaleSec + rttHalfSec);
+        if (this.finishM !== null) {
+          initialDist = Math.min(this.finishM, initialDist);
+        }
         this.tracks.set(p.id, {
           latest: p,
+          lastSeen: p.lastSeen,
           receivedAtMs: nowMs,
+          serverStaleSec,
           rttHalfSec,
           curX: p.x,
-          curDist: p.distanceM,
+          curDist: initialDist,
           curSpeed: p.speed,
           curTilt: p.tiltAngle,
         });
@@ -194,10 +237,10 @@ export class OpponentInterpolator {
   public sample(dt: number, nowMs: number): InterpolatedOpponent[] {
     const out: InterpolatedOpponent[] = [];
     const safeDt = Math.min(0.08, Math.max(0.001, dt));
-    const speedAlpha = 1 - Math.exp(-8 * safeDt);
-    const distAlpha = 1 - Math.exp(-5.5 * safeDt);
-    const xAlpha = 1 - Math.exp(-9 * safeDt);
-    const tiltAlpha = 1 - Math.exp(-10 * safeDt);
+    const speedAlpha = 1 - Math.exp(-10 * safeDt);
+    const distAlpha = 1 - Math.exp(-7.5 * safeDt);
+    const xAlpha = 1 - Math.exp(-12 * safeDt);
+    const tiltAlpha = 1 - Math.exp(-12 * safeDt);
 
     for (const tr of this.tracks.values()) {
       const p = tr.latest;
@@ -209,7 +252,9 @@ export class OpponentInterpolator {
       }
 
       const ageSec = finished ? 0 : Math.min(1.4, Math.max(0, (nowMs - tr.receivedAtMs) / 1000));
-      let targetDist = finished ? p.distanceM : p.distanceM + p.speed * (ageSec + tr.rttHalfSec);
+      let targetDist = finished
+        ? p.distanceM
+        : p.distanceM + p.speed * (ageSec + tr.serverStaleSec + tr.rttHalfSec);
       if (this.finishM !== null) {
         targetDist = Math.min(this.finishM, targetDist);
       }

@@ -284,6 +284,10 @@ function storageLabel(): string {
   return HAS_REDIS ? 'upstash-redis' : 'fluid-memory';
 }
 
+function regionLabel(): string {
+  return process.env.VERCEL_REGION || 'local';
+}
+
 export async function GET(request: Request): Promise<Response> {
   try {
     const url = new URL(request.url);
@@ -307,6 +311,7 @@ export async function GET(request: Request): Promise<Response> {
       room,
       serverTime: now,
       storage: storageLabel(),
+      region: regionLabel(),
     });
   } catch (err) {
     console.error('GET /api/race error:', err);
@@ -372,7 +377,7 @@ export async function POST(request: Request): Promise<Response> {
       };
 
       await saveRoomMeta(room);
-      return jsonRes({ ok: true, code, playerId, room, serverTime: now, storage: storageLabel() });
+      return jsonRes({ ok: true, code, playerId, room, serverTime: now, storage: storageLabel(), region: regionLabel() });
     }
 
     const code = sanitizeCode(body.code);
@@ -421,7 +426,7 @@ export async function POST(request: Request): Promise<Response> {
       room.players.push(newPlayer);
       room.updatedAt = now;
       await savePlayerField(code, newPlayer, room);
-      return jsonRes({ ok: true, code, playerId, room, serverTime: now, storage: storageLabel() });
+      return jsonRes({ ok: true, code, playerId, room, serverTime: now, storage: storageLabel(), region: regionLabel() });
     }
 
     const playerId = sanitizeStr(body.playerId, 64);
@@ -442,7 +447,7 @@ export async function POST(request: Request): Promise<Response> {
       player.lastSeen = now;
       room.updatedAt = now;
       await savePlayerField(code, player, room);
-      return jsonRes({ ok: true, room, serverTime: now, storage: storageLabel() });
+      return jsonRes({ ok: true, room, serverTime: now, storage: storageLabel(), region: regionLabel() });
     }
 
     if (action === 'route') {
@@ -458,7 +463,7 @@ export async function POST(request: Request): Promise<Response> {
         p.distanceM = room.route.startM;
       }
       await saveRoomMeta(room);
-      return jsonRes({ ok: true, room, serverTime: now, storage: storageLabel() });
+      return jsonRes({ ok: true, room, serverTime: now, storage: storageLabel(), region: regionLabel() });
     }
 
     if (action === 'start') {
@@ -466,7 +471,7 @@ export async function POST(request: Request): Promise<Response> {
         return jsonRes({ error: 'শুধু হোস্ট রেস শুরু করতে পারবে!' }, 403);
       }
       if (room.status !== 'lobby') {
-        return jsonRes({ ok: true, room, serverTime: now, storage: storageLabel() });
+        return jsonRes({ ok: true, room, serverTime: now, storage: storageLabel(), region: regionLabel() });
       }
       room.status = 'countdown';
       room.startAt = now + 3600;
@@ -488,7 +493,7 @@ export async function POST(request: Request): Promise<Response> {
         p.lastSeen = now;
       }
       await saveRoomMeta(room);
-      return jsonRes({ ok: true, room, serverTime: now, storage: storageLabel() });
+      return jsonRes({ ok: true, room, serverTime: now, storage: storageLabel(), region: regionLabel() });
     }
 
     if (action === 'sync') {
@@ -521,7 +526,7 @@ export async function POST(request: Request): Promise<Response> {
       }
       room.updatedAt = now;
       await savePlayerField(code, player, metaChanged ? room : undefined);
-      return jsonRes({ ok: true, room, serverTime: now, storage: storageLabel() });
+      return jsonRes({ ok: true, room, serverTime: now, storage: storageLabel(), region: regionLabel() });
     }
 
     if (action === 'rematch') {
@@ -548,7 +553,7 @@ export async function POST(request: Request): Promise<Response> {
         p.lastSeen = now;
       }
       await saveRoomMeta(room);
-      return jsonRes({ ok: true, room, serverTime: now, storage: storageLabel() });
+      return jsonRes({ ok: true, room, serverTime: now, storage: storageLabel(), region: regionLabel() });
     }
 
     if (action === 'leave') {
@@ -559,7 +564,7 @@ export async function POST(request: Request): Promise<Response> {
       }
       room.updatedAt = now;
       await removePlayerField(room, playerId);
-      return jsonRes({ ok: true, serverTime: now, storage: storageLabel() });
+      return jsonRes({ ok: true, serverTime: now, storage: storageLabel(), region: regionLabel() });
     }
 
     return jsonRes({ error: 'Unknown action' }, 400);

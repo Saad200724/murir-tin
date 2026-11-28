@@ -1039,7 +1039,7 @@ class MurirTinApp {
           this.refreshRaceHud(opponents);
 
           this.mpSyncAccum += dt;
-          if (this.mpSyncAccum >= 0.25 && !this.mpSyncInFlight) {
+          if (this.mpSyncAccum >= 0.12 && !this.mpSyncInFlight) {
             this.mpSyncAccum = 0;
             void this.pushRaceSync(false);
           }
@@ -1894,9 +1894,9 @@ class MurirTinApp {
       } catch {
         // Ignore transient network errors while polling
       }
-      this.mpPollTimer = window.setTimeout(() => void poll(), 950);
+      this.mpPollTimer = window.setTimeout(() => void poll(), 600);
     };
-    this.mpPollTimer = window.setTimeout(() => void poll(), 950);
+    this.mpPollTimer = window.setTimeout(() => void poll(), 600);
   }
 
   private stopMpPolling(): void {
@@ -1915,8 +1915,8 @@ class MurirTinApp {
     const pingEl = document.getElementById('race-ping-badge');
     if (pingEl) {
       pingEl.textContent = `📶 ${this.mpLastRttMs}ms`;
-      pingEl.classList.toggle('is-warn', this.mpLastRttMs >= 180 && this.mpLastRttMs < 380);
-      pingEl.classList.toggle('is-bad', this.mpLastRttMs >= 380);
+      pingEl.classList.toggle('is-warn', this.mpLastRttMs >= 140 && this.mpLastRttMs < 280);
+      pingEl.classList.toggle('is-bad', this.mpLastRttMs >= 280);
     }
   }
 
@@ -1940,7 +1940,7 @@ class MurirTinApp {
     this.clearRaceProgressDots();
     this.mpRaceRand = createSeededRandom(room.seed);
     this.opponentInterp.clear();
-    this.opponentInterp.updateFromRoom(room, this.mpPlayerId!, performance.now(), this.mpLastRttMs);
+    this.opponentInterp.updateFromRoom(room, this.mpPlayerId!, performance.now(), this.mpLastRttMs, serverTime);
 
     if (this.mpDialog.open) this.mpDialog.close();
     if (this.raceResultDialog.open) this.raceResultDialog.close();
@@ -1991,7 +1991,7 @@ class MurirTinApp {
       this.mpGoBannerHideAt = now + 450;
       this.isPlaying = true;
       this.mpRaceStartedAt = now;
-      this.mpSyncAccum = 0.2;
+      this.mpSyncAccum = 0.12;
       this.showCallout(`🏁 রেস শুরু! গন্তব্য: ${this.activeRoom.route.label}`);
     }
   }
@@ -2019,7 +2019,13 @@ class MurirTinApp {
         this.mpLastAppliedSeq = seq;
         this.activeRoom = res.room;
         this.updateServerClockOffset(res.serverTime, res.rttMs);
-        this.opponentInterp.updateFromRoom(res.room, this.mpPlayerId, performance.now(), this.mpLastRttMs);
+        this.opponentInterp.updateFromRoom(
+          res.room,
+          this.mpPlayerId,
+          performance.now(),
+          this.mpLastRttMs,
+          res.serverTime
+        );
       }
       return true;
     } catch {

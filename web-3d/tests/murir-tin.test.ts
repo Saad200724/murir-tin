@@ -310,7 +310,7 @@ describe('Murir Tin 3D — Explore Bangladesh, Bridges, Slopes & Mechanics', () 
       ],
     };
     const interp = new OpponentInterpolator();
-    interp.updateFromRoom(room, 'p1', 1200, 240);
+    interp.updateFromRoom(room, 'p1', 1200, 240, 1250);
     const s1 = interp.sample(0.05, 1250);
     const s2 = interp.sample(0.05, 1650);
     const s3 = interp.sample(0.05, 1850);
@@ -320,6 +320,11 @@ describe('Murir Tin 3D — Explore Bangladesh, Bridges, Slopes & Mechanics', () 
     // Continues smoothly dead-reckoning past 350ms without freezing
     expect(s2[0].distanceM).toBeGreaterThan(s1[0].distanceM);
     expect(s3[0].distanceM).toBeGreaterThan(s2[0].distanceM);
+
+    // Duplicate server snapshot (same lastSeen & distanceM) must not pull opponent backwards
+    interp.updateFromRoom(room, 'p1', 1700, 100, 1750);
+    const sAfterDup = interp.sample(0.05, 1750);
+    expect(sAfterDup[0].distanceM).toBeGreaterThanOrEqual(s2[0].distanceM);
     expect(formatRaceTime(64500)).toBe('01:04.5');
     expect(sortRaceStandings(room.players)[0].id).toBe('p2');
   });
